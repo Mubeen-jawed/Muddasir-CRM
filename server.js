@@ -8,11 +8,13 @@ const { GEOS, getAllAccountIds } = require("./config");
 
 const app = express();
 const PORT = process.env.PORT || 3500;
-const PIPEBOARD_API_KEY = process.env.PIPEBOARD_API_KEY;
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+const META_API_VERSION = process.env.META_API_VERSION || "v26.0";
 const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
 const WARN_THRESHOLD = parseInt(process.env.ALERT_WARN_THRESHOLD || "80") / 100;
 const DANGER_THRESHOLD = parseInt(process.env.ALERT_DANGER_THRESHOLD || "95") / 100;
 const REFRESH_MINUTES = parseInt(process.env.REFRESH_INTERVAL_MINUTES || "60");
+const TOKEN_WARN_DAYS = parseInt(process.env.TOKEN_WARN_DAYS || "7");
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
 
 // ── In-memory data store ──
@@ -20,6 +22,8 @@ let cachedData = null;         // per-geo MTD (month-to-date) spend + leads
 let cachedWeekData = null;     // per-geo trailing-7-day spend + leads (drives EOM projection)
 let lastFetchTime = null;
 let fetchError = null;
+let tokenExpiry = null;      // {valid, expiresAt, daysLeft} from debug_token
+let lastTokenWarnDate = null; // caps the Slack expiry warning at one per day
 
 // ── Budget overrides (persisted to disk) ──
 const BUDGET_FILE = path.join(__dirname, "budgets.json");
@@ -90,83 +94,160 @@ function getDayOfMonth() {
   return partsInTz(CLIENT_TZ).day;
 }
 
-// ── Pipeboard MCP API call (JSON-RPC 2.0) ──
-async function fetchFromPipeboard(accountIds, since, until) {
-  const url = "https://meta-ads.mcp.pipeboard.co/";
+// ── Meta Graph API (Marketing API) insights ──
+// Free: Meta charges nothing for API calls. Auth is a single access token —
+// either a long-lived user token (~60 days) or a System User token (never
+// expires). Both are read with the ads_read scope; neither changes this code.
+const INSIGHT_FIELDS =
+  "campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type";
 
-  const rpcBody = {
-    jsonrpc: "2.0",
-    id: Date.now(),
-    method: "tools/call",
-    params: {
-      name: "bulk_get_insights",
-      arguments: {
-        account_ids: accountIds,
-        level: "campaign",
-        since,
-        until,
-        fields: ["spend", "impressions", "clicks", "actions", "cost_per_action_type"],
-        compact: false,
-      },
-    },
-  };
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      Authorization: `Bearer ${PIPEBOARD_API_KEY}`,
-    },
-    body: JSON.stringify(rpcBody),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Pipeboard MCP HTTP ${response.status}: ${errText}`);
+function metaError(accountId, status, body) {
+  const err = (body && body.error) || {};
+  // 190 = expired or revoked OAuth token. This is the single most likely
+  // failure mode for a long-lived user token, so name the fix in the message.
+  if (err.code === 190) {
+    return new Error(
+      `Meta token expired or revoked (${accountId}): ${err.message} — ` +
+        `regenerate at developers.facebook.com/tools/explorer, extend it in the ` +
+        `Access Token Debugger, then update META_ACCESS_TOKEN in .env`
+    );
   }
-
-  const envelope = await response.json();
-  if (envelope.error) {
-    throw new Error(`Pipeboard MCP error: ${JSON.stringify(envelope.error)}`);
-  }
-
-  const content = envelope.result && envelope.result.content;
-  if (!Array.isArray(content) || !content[0] || typeof content[0].text !== "string") {
-    throw new Error(`Unexpected MCP response shape: ${JSON.stringify(envelope).slice(0, 300)}`);
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(content[0].text);
-  } catch (e) {
-    throw new Error(`Failed to parse MCP text payload: ${e.message}`);
-  }
-
-  return payload;
+  return new Error(
+    `Meta API error ${status} on ${accountId}: ` +
+      (err.message || JSON.stringify(body || {}).slice(0, 200))
+  );
 }
 
-// ── Alternative: Direct Meta Graph API call ──
-// If Pipeboard REST API isn't available, use Meta's Graph API directly
-// with your access token from Pipeboard
-async function fetchFromMetaDirect(accountId, since, until, accessToken) {
-  const url =
-    `https://graph.facebook.com/v21.0/${accountId}/insights?` +
+// One account, following paging.next so accounts with many campaigns aren't
+// silently truncated at the page limit.
+async function fetchAccountInsights(accountId, since, until) {
+  let url =
+    `https://graph.facebook.com/${META_API_VERSION}/${accountId}/insights?` +
     new URLSearchParams({
       time_range: JSON.stringify({ since, until }),
       level: "campaign",
-      fields: "campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type",
+      fields: INSIGHT_FIELDS,
       limit: "500",
-      access_token: accessToken,
+      access_token: META_ACCESS_TOKEN,
     });
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Meta API error ${response.status}: ${errText}`);
-  }
+  const campaigns = [];
+  while (url) {
+    const response = await fetch(url);
+    const body = await response.json().catch(() => null);
 
-  return response.json();
+    if (!response.ok || !body || body.error) {
+      throw metaError(accountId, response.status, body);
+    }
+    if (Array.isArray(body.data)) campaigns.push(...body.data);
+    url = (body.paging && body.paging.next) || null;
+  }
+  return campaigns;
+}
+
+// All accounts. Deliberately fails the whole fetch if any account errors:
+// dropping one account would quietly under-report spend, and under-reporting
+// is the dangerous direction for budget pacing and the 80/95% alerts.
+async function fetchInsights(accountIds, since, until) {
+  if (!META_ACCESS_TOKEN) {
+    throw new Error("No Meta token configured — set META_ACCESS_TOKEN in .env");
+  }
+  return Promise.all(
+    accountIds.map(async (accountId) => ({
+      accountId,
+      campaigns: await fetchAccountInsights(accountId, since, until),
+    }))
+  );
+}
+
+// ── Token expiry watch ──
+// A dead token otherwise looks like a dashboard that simply stopped moving.
+async function checkTokenExpiry() {
+  if (!META_ACCESS_TOKEN) return;
+  try {
+    const url =
+      `https://graph.facebook.com/${META_API_VERSION}/debug_token?` +
+      new URLSearchParams({
+        input_token: META_ACCESS_TOKEN,
+        access_token: META_ACCESS_TOKEN,
+      });
+    const body = await (await fetch(url)).json();
+    const info = body && body.data;
+
+    // A fully dead token can't authenticate this call either, so Meta answers
+    // with an error envelope instead of data.is_valid === false. Both mean dead.
+    if (!info || !info.is_valid) {
+      const why =
+        (body && body.error && body.error.message) || "token rejected by Meta";
+      tokenExpiry = { valid: false, expiresAt: null, daysLeft: null };
+      console.error(`  [TOKEN] NOT valid (${why}) — regenerate META_ACCESS_TOKEN in .env`);
+      await postTokenWarning();
+      return;
+    }
+    // expires_at of 0 means a never-expiring System User token.
+    if (!info.expires_at) {
+      tokenExpiry = { valid: true, expiresAt: null, daysLeft: null };
+      console.log("  [TOKEN] Valid, never expires (System User token)");
+      return;
+    }
+
+    const expiresAt = new Date(info.expires_at * 1000);
+    const daysLeft = Math.floor((expiresAt - Date.now()) / 86400000);
+    tokenExpiry = {
+      valid: true,
+      expiresAt: expiresAt.toISOString(),
+      daysLeft,
+    };
+    const line = `  [TOKEN] Valid, expires ${expiresAt.toISOString().slice(0, 10)} (${daysLeft} days left)`;
+    if (daysLeft <= TOKEN_WARN_DAYS) {
+      console.error(`${line} ** RENEW NOW **`);
+      await postTokenWarning();
+    } else {
+      console.log(line);
+    }
+  } catch (err) {
+    console.error(`  [TOKEN] Expiry check failed: ${err.message}`);
+  }
+}
+
+// ── Slack warning for a dying token ──
+// Without this, an expired token looks identical to a quiet week: the numbers
+// simply stop moving, and nobody notices until a budget has already blown past.
+async function postTokenWarning() {
+  if (!SLACK_WEBHOOK || !tokenExpiry) return;
+
+  // One warning per day, so a restart loop can't spam the channel.
+  const today = getToday();
+  if (lastTokenWarnDate === today) return;
+
+  const dead = !tokenExpiry.valid || tokenExpiry.daysLeft <= 0;
+  const days = tokenExpiry.daysLeft;
+  const headline = dead
+    ? ":rotating_light: *Meta API token has expired* — the budget dashboard has stopped updating."
+    : `:warning: *Meta API token expires in ${days} day${days === 1 ? "" : "s"}* (${tokenExpiry.expiresAt.slice(0, 10)}).`;
+
+  const lines = [
+    headline,
+    "",
+    "*To renew:*",
+    "1. developers.facebook.com/tools/explorer — generate a token with the `ads_read` scope",
+    "2. developers.facebook.com/tools/debug/accesstoken — paste it, then *Extend Access Token*",
+    "3. Update `META_ACCESS_TOKEN` in `.env` and restart the dashboard",
+    "",
+    "_A System User token from Business Settings never expires and retires this warning for good._",
+  ];
+
+  try {
+    await fetch(SLACK_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: lines.join("\n") }),
+    });
+    lastTokenWarnDate = today;
+    console.log("  [TOKEN] Slack expiry warning sent");
+  } catch (err) {
+    console.error(`  [TOKEN] Slack warning failed: ${err.message}`);
+  }
 }
 
 // ── Categorize campaigns into geos ──
@@ -253,7 +334,7 @@ function categorizeCampaigns(apiResults) {
 
 // ── Normalize API response formats ──
 function normalizeResults(apiResults) {
-  // If it's a Pipeboard bulk response with results array
+  // Legacy bulk-response shape with a results array
   if (apiResults.results && Array.isArray(apiResults.results)) {
     return apiResults.results.map((r) => ({
       accountId: r.account_id,
@@ -296,35 +377,11 @@ async function refreshData() {
   console.log(`  Accounts: ${accountIds.join(", ")}`);
 
   try {
-    let apiResults;
-    let weekApiResults = null;
-
-    if (PIPEBOARD_API_KEY && (PIPEBOARD_API_KEY.startsWith("pipeboard_") || PIPEBOARD_API_KEY.startsWith("pb_"))) {
-      // Use Pipeboard MCP (JSON-RPC) — fetch MTD and trailing-7d in parallel
-      [apiResults, weekApiResults] = await Promise.all([
-        fetchFromPipeboard(accountIds, since, until),
-        fetchFromPipeboard(accountIds, weekSince, until),
-      ]);
-    } else if (PIPEBOARD_API_KEY) {
-      // Treat as Meta access token — call each account separately
-      const allResults = [];
-      for (const accId of accountIds) {
-        try {
-          const result = await fetchFromMetaDirect(accId, since, until, PIPEBOARD_API_KEY);
-          if (result.data) {
-            allResults.push({
-              accountId: accId,
-              campaigns: result.data,
-            });
-          }
-        } catch (err) {
-          console.error(`  Error fetching ${accId}: ${err.message}`);
-        }
-      }
-      apiResults = allResults;
-    } else {
-      throw new Error("No API key configured — set PIPEBOARD_API_KEY in .env");
-    }
+    // MTD and trailing-7d in parallel
+    const [apiResults, weekApiResults] = await Promise.all([
+      fetchInsights(accountIds, since, until),
+      fetchInsights(accountIds, weekSince, until),
+    ]);
 
     cachedData = categorizeCampaigns(apiResults);
     cachedWeekData = weekApiResults ? categorizeCampaigns(weekApiResults) : null;
@@ -403,7 +460,7 @@ async function postDailyLeadSummary() {
   const accountIds = getAllAccountIds();
 
   try {
-    const raw = await fetchFromPipeboard(accountIds, today, today);
+    const raw = await fetchInsights(accountIds, today, today);
     const geoData = categorizeCampaigns(raw);
 
     const lines = GEOS.map((g) => {
@@ -538,8 +595,8 @@ async function postWeeklyResultsSummary() {
 
   try {
     const [thisRaw, priorRaw] = await Promise.all([
-      fetchFromPipeboard(accountIds, thisStart, thisEnd),
-      fetchFromPipeboard(accountIds, priorStart, priorEnd),
+      fetchInsights(accountIds, thisStart, thisEnd),
+      fetchInsights(accountIds, priorStart, priorEnd),
     ]);
     const thisGeo = categorizeCampaigns(thisRaw);
     const priorGeo = categorizeCampaigns(priorRaw);
@@ -562,12 +619,10 @@ async function postWeeklyResultsSummary() {
       const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       return `${names[m - 1]} ${d}`;
     };
-    const deltaText = (delta, opts = {}) => {
-      const { goodDirection = "up", suffix = "" } = opts;
-      const isGood = goodDirection === "up" ? delta > 0 : delta < 0;
+    const deltaText = (delta) => {
       const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "—";
       const magnitude = Math.abs(delta).toFixed(0);
-      return `${arrow} ${magnitude}%${suffix}`;
+      return `${arrow} ${magnitude}%`;
     };
 
     // ── Per-geo analysis ──
@@ -607,14 +662,12 @@ async function postWeeklyResultsSummary() {
       // Trend annotations (short, human)
       const trendLines = [];
       if (Math.abs(leadDelta) >= 3) {
-        const good = leadDelta > 0;
-        trendLines.push(`Leads ${deltaText(leadDelta, { goodDirection: "up" })}` + (leadDelta < -20 && pLeads >= 5 ? " (needs attention)" : ""));
+        trendLines.push(`Leads ${deltaText(leadDelta)}` + (leadDelta < -20 && pLeads >= 5 ? " (needs attention)" : ""));
       } else {
         trendLines.push(`Leads steady (${tLeads} vs ${pLeads})`);
       }
       if (pCpl > 0 && tCpl > 0 && Math.abs(cplDelta) >= 3) {
-        const worse = cplDelta > 0;
-        let cplNote = `Cost per lead ${deltaText(cplDelta, { goodDirection: "down" })}`;
+        let cplNote = `Cost per lead ${deltaText(cplDelta)}`;
         if (cplDelta > 20) cplNote += " (spiked — investigate)";
         else if (cplDelta > 10) cplNote += " (creeping up)";
         else if (cplDelta < -10) cplNote += " (nice)";
@@ -858,6 +911,7 @@ app.get("/api/health", (req, res) => {
     status: "ok",
     lastFetched: lastFetchTime,
     error: fetchError,
+    token: tokenExpiry,
     uptime: process.uptime(),
   });
 });
@@ -909,6 +963,16 @@ cron.schedule(
   { timezone: "America/New_York" }
 );
 
+// ── Cron: token expiry check daily at 9 AM Pacific ──
+cron.schedule(
+  "0 9 * * *",
+  () => {
+    console.log(`[CRON] Token expiry check triggered`);
+    checkTokenExpiry();
+  },
+  { timezone: "America/Los_Angeles" }
+);
+
 // ── Start server ──
 app.listen(PORT, async () => {
   console.log(`\n========================================`);
@@ -918,6 +982,8 @@ app.listen(PORT, async () => {
   console.log(`  Slack alerts: ${SLACK_WEBHOOK ? "enabled" : "disabled"}`);
   console.log(`  Password: ${DASHBOARD_PASSWORD ? "enabled" : "disabled"}`);
   console.log(`========================================\n`);
+
+  await checkTokenExpiry();
 
   // Initial data fetch
   await refreshData();
