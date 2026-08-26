@@ -113,12 +113,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.1);border-top-color:#e8e8e8;border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Password */
-.auth-screen{position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;z-index:200}
-.auth-box{text-align:center}
-.auth-box h2{font-size:18px;font-weight:600;margin-bottom:16px}
-.auth-box input{padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:#141414;color:#e8e8e8;font-size:14px;width:220px;margin-bottom:8px;display:block;text-align:center;font-family:inherit}
-.auth-box .btn{width:220px}
+/* Sign out */
+.btn-signout{font-size:11px;padding:3px 10px;border-radius:6px;color:#888}
+.btn-signout:hover{color:#e8e8e8}
 
 /* Responsive */
 @media(max-width:600px){
@@ -150,13 +147,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </head>
 <body>
 
-<div id="auth-screen" class="auth-screen" style="display:none">
-  <div class="auth-box">
-    <h2>Dashboard login</h2>
-    <input type="password" id="auth-password" placeholder="Password" onkeydown="if(event.key==='Enter')doAuth()">
-    <button class="btn" onclick="doAuth()" style="width:220px;margin-top:4px">Enter</button>
-  </div>
-</div>
 
 <div id="loading" class="loading-overlay" style="display:none">
   <div style="text-align:center">
@@ -172,7 +162,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="sub" id="monthLabel"></div>
     </div>
     <div class="header-actions">
-      <button class="btn" id="refreshBtn" onclick="doRefresh()">Refresh live data</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm btn-signout" onclick="doSignOut()" title="End this session">Sign out</button>
+        <button class="btn" id="refreshBtn" onclick="doRefresh()">Refresh live data</button>
+      </div>
       <div class="live-badge" id="liveBadge" data-state="live" title="">
         <span class="live-dot"></span>
         <span class="live-label" id="liveLabel">Live</span>
@@ -200,36 +193,24 @@ let dashData = null;
 let openCampaigns = {};
 let editingBudget = {};
 
-async function doAuth() {
-  const pw = document.getElementById('auth-password').value;
-  try {
-    const res = await fetch(`${API_BASE}/api/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw })
-    });
-    if (res.ok) {
-      document.getElementById('auth-screen').style.display = 'none';
-      localStorage.setItem('dash_pw', pw);
-      init();
-    } else {
-      alert('Wrong password');
-    }
-  } catch (e) {
-    alert('Connection error');
-  }
+// The session lives in an HttpOnly cookie the browser attaches automatically,
+// so there is nothing for this page to hold, store, or send by hand.
+// An expired session shows up as a 401 on any call — bounce to the form.
+function toLogin() {
+  window.location.replace('/login');
 }
 
-function getAuthHeader() {
-  const pw = localStorage.getItem('dash_pw');
-  return pw ? { 'Authorization': `Bearer ${pw}` } : {};
+async function doSignOut() {
+  try {
+    await fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'same-origin' });
+  } catch (e) { /* sign out locally regardless */ }
+  toLogin();
 }
 
 async function fetchDashboard() {
-  const res = await fetch(`${API_BASE}/api/dashboard`, { headers: getAuthHeader() });
+  const res = await fetch(`${API_BASE}/api/dashboard`, { credentials: 'same-origin' });
   if (res.status === 401) {
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('dashboard').style.display = 'none';
+    toLogin();
     return null;
   }
   return res.json();
@@ -241,7 +222,7 @@ async function doRefresh() {
   btn.textContent = 'Pulling data...';
   setLiveState('loading', 'Fetching…');
   try {
-    await fetch(`${API_BASE}/api/refresh`, { method: 'POST', headers: getAuthHeader() });
+    await fetch(`${API_BASE}/api/refresh`, { method: 'POST', credentials: 'same-origin' });
     await loadData();
   } catch (e) {
     console.error(e);
@@ -549,7 +530,8 @@ async function saveBudget(geoId) {
   try {
     await fetch(`${API_BASE}/api/budget`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ geoId, budget: newBudget })
     });
     delete editingBudget[geoId];

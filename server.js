@@ -5,6 +5,7 @@ const fetch = require("node-fetch");
 const path = require("path");
 const fs = require("fs");
 const { GEOS, getAllAccountIds } = require("./config");
+const auth = require("./auth");
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -15,7 +16,7 @@ const WARN_THRESHOLD = parseInt(process.env.ALERT_WARN_THRESHOLD || "80") / 100;
 const DANGER_THRESHOLD = parseInt(process.env.ALERT_DANGER_THRESHOLD || "95") / 100;
 const REFRESH_MINUTES = parseInt(process.env.REFRESH_INTERVAL_MINUTES || "60");
 const TOKEN_WARN_DAYS = parseInt(process.env.TOKEN_WARN_DAYS || "7");
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
 
 // ── In-memory data store ──
 let cachedData = null;         // per-geo MTD (month-to-date) spend + leads
@@ -783,7 +784,59 @@ async function postWeeklyResultsSummary() {
 }
 
 // ── Middleware ──
-app.use(express.json());
+// One proxy hop (Nginx). Without this req.ip is always 127.0.0.1 and the
+// login rate limiter would lock out every visitor at once.
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "64kb" }));
+
+// The dashboard is same-origin and loads no third-party assets, so a tight
+// CSP costs nothing. 'unsafe-inline' is required only because index.html
+// carries its script and styles inline.
+app.use((req, res, next) => {
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Referrer-Policy", "same-origin");
+  res.set(
+    "Content-Security-Policy",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; " +
+      "script-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+      "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+  );
+  next();
+});
+
+// ── Auth gate ──
+// Everything except these paths requires a valid session. This runs BEFORE
+// express.static, so index.html itself is protected — previously the page was
+// served to anyone and only /api was gated.
+const PUBLIC_PATHS = new Set(["/login", "/login.html", "/api/login", "/favicon.ico"]);
+
+app.use((req, res, next) => {
+  if (!auth.AUTH_ENABLED) return next();
+  if (PUBLIC_PATHS.has(req.path)) return next();
+
+  // CI smoke-tests /api/health over loopback, before any browser session exists.
+  if (req.path === "/api/health" && auth.isLoopbackDirect(req)) return next();
+
+  const user = auth.sessionUser(req);
+  if (user) {
+    req.user = user;
+    return next();
+  }
+
+  // API callers get a status they can act on; browsers get sent to the form.
+  if (req.path.startsWith("/api/")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return res.redirect(302, "/login");
+});
+
+app.get("/login", (req, res) => {
+  if (auth.AUTH_ENABLED && auth.sessionUser(req)) return res.redirect(302, "/");
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     // never cache HTML so UI updates take effect on the next page load, not after a manual hard-refresh
@@ -795,16 +848,6 @@ app.use(express.static(path.join(__dirname, "public"), {
   },
 }));
 
-// Optional password protection
-if (DASHBOARD_PASSWORD) {
-  app.use("/api", (req, res, next) => {
-    const auth = req.headers.authorization;
-    if (auth === `Bearer ${DASHBOARD_PASSWORD}`) return next();
-    // Allow if session cookie matches
-    if (req.headers.cookie && req.headers.cookie.includes(`dash_auth=${DASHBOARD_PASSWORD}`)) return next();
-    res.status(401).json({ error: "Unauthorized" });
-  });
-}
 
 // ── API Routes ──
 
@@ -938,14 +981,46 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Auth endpoint for password-protected dashboards
-app.post("/api/auth", (req, res) => {
-  if (!DASHBOARD_PASSWORD) return res.json({ success: true });
-  if (req.body.password === DASHBOARD_PASSWORD) {
-    res.setHeader("Set-Cookie", `dash_auth=${DASHBOARD_PASSWORD}; HttpOnly; Path=/; Max-Age=86400`);
+// ── Auth routes ──
+app.post("/api/login", (req, res) => {
+  if (!auth.AUTH_ENABLED) return res.json({ success: true });
+
+  const limit = auth.rateLimitStatus(req);
+  if (!limit.allowed) {
+    res.set("Retry-After", String(limit.retryAfter));
+    return res.status(429).json({
+      error: `Too many attempts. Try again in ${Math.ceil(limit.retryAfter / 60)} minute(s).`,
+      retryAfter: limit.retryAfter,
+    });
+  }
+
+  const { username, password } = req.body || {};
+
+  if (auth.verifyCredentials(username, password)) {
+    auth.recordSuccess(req);
+    auth.setSessionCookie(req, res, auth.issueToken(auth.AUTH_USERNAME));
+    console.log(`[AUTH] Login OK from ${req.ip}`);
     return res.json({ success: true });
   }
-  res.status(401).json({ error: "Wrong password" });
+
+  const result = auth.recordFailure(req);
+  console.warn(`[AUTH] Failed login from ${req.ip}${result.locked ? " — now locked out" : ""}`);
+  // Deliberately vague: never reveal which half was wrong.
+  return res.status(401).json({
+    error: result.locked
+      ? "Too many attempts. Locked out for 15 minutes."
+      : "Incorrect username or password.",
+    remaining: result.remaining,
+  });
+});
+
+app.post("/api/logout", (req, res) => {
+  auth.clearSessionCookie(req, res);
+  res.json({ success: true });
+});
+
+app.get("/api/me", (req, res) => {
+  res.json({ username: req.user || null, authEnabled: auth.AUTH_ENABLED });
 });
 
 // ── Cron: auto-refresh ──
@@ -1002,7 +1077,12 @@ app.listen(PORT, async () => {
   console.log(`  http://localhost:${PORT}`);
   console.log(`  Auto-refresh: every ${REFRESH_MINUTES} minutes`);
   console.log(`  Slack alerts: ${SLACK_WEBHOOK ? "enabled" : "disabled"}`);
-  console.log(`  Password: ${DASHBOARD_PASSWORD ? "enabled" : "disabled"}`);
+  if (auth.AUTH_ENABLED) {
+    console.log(`  Login: required (user "${auth.AUTH_USERNAME}", ${auth.SESSION_HOURS}h sessions)`);
+  } else {
+    console.warn(`  Login: DISABLED — anyone who can reach this port sees the dashboard.`);
+    console.warn(`         Set AUTH_USERNAME, AUTH_PASSWORD_HASH and SESSION_SECRET in .env.`);
+  }
   console.log(`========================================\n`);
 
   await checkTokenExpiry();
