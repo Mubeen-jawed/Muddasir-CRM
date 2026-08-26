@@ -16,3 +16,6 @@
 *.bak
 *.bak.*
 *.save
+# live runtime state — budget overrides written by /api/budget.
+# tracked copies get clobbered by deploys; the server copy is authoritative.
+budgets.json

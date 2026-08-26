@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Sync and reload
+    name: Update and reload
     runs-on: ubuntu-latest
 
     steps:
@@ -26,8 +26,12 @@ jobs:
       - name: Syntax check
         run: |
           node --check server.js
+          node --check auth.js
           node --check config.js
           node --check ecosystem.config.js
+          bash -n deploy.sh
+          bash -n deploy-remote.sh
+          bash -n scripts/vps-deploy.sh
 
       - name: Configure SSH
         env:
@@ -40,29 +44,11 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p "${VPS_PORT:-22}" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      # --delete keeps the server matching the repo, but excluded paths are
-      # never deleted by rsync, so server-only state survives every deploy:
-      #   .env         secrets, never in git
-      #   budgets.json live budget overrides written by /api/budget
-      #   logs/        pm2 output
-      - name: Sync files to VPS
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-          VPS_PATH: ${{ secrets.VPS_PATH }}
-        run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/id_deploy -p ${VPS_PORT:-22}" \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude '.env' \
-            --exclude 'logs/' \
-            --exclude 'budgets.json' \
-            ./ "$VPS_USER@$VPS_HOST:$VPS_PATH/"
-
-      - name: Install, reload, smoke test
+      # The VPS is itself a git clone that people commit from, so the deploy
+      # updates it with git rather than overwriting files underneath it.
+      # vps-deploy.sh is piped in over stdin, so it is never the file it is
+      # updating. It stashes any uncommitted server-side work before resetting.
+      - name: Deploy over SSH
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -70,4 +56,4 @@ jobs:
           VPS_PATH: ${{ secrets.VPS_PATH }}
         run: |
           ssh -i ~/.ssh/id_deploy -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" \
-            "cd '$VPS_PATH' && bash deploy-remote.sh"
+            "VPS_PATH='$VPS_PATH' SHA='${{ github.sha }}' bash -s" < scripts/vps-deploy.sh

@@ -100,9 +100,15 @@ sudo certbot --nginx -d budget.yourdomain.com
 ## Continuous Deployment
 
 `.github/workflows/deploy.yml` redeploys on every push to `main` (and on manual
-**Run workflow**). It syntax-checks, rsyncs the repo to the VPS, runs
+**Run workflow**). It syntax-checks, updates the VPS checkout with git, runs
 `npm ci --omit=dev`, reloads PM2 with zero downtime, and fails the run if the
 app doesn't complete a Meta fetch afterwards.
+
+The VPS is itself a git clone that people commit from, so the deploy moves it
+with `git checkout -B main <sha>` rather than overwriting files underneath it —
+which would leave the server's `.git` out of step with its own working tree.
+`scripts/vps-deploy.sh` is piped in over stdin rather than executed from the
+checkout, so it is never the file it is updating.
 
 ### Required repository secrets
 
@@ -130,18 +136,33 @@ ssh-copy-id -i ~/.ssh/vps_deploy.pub USER@VPS_HOST
 cat ~/.ssh/vps_deploy
 ```
 
-### What the deploy never touches
+### Server-side state is preserved
 
-These live only on the server and are excluded from the sync, so a deploy can't
-clobber them:
+These live only on the server and survive every deploy:
 
-- `.env` — secrets
-- `budgets.json` — budget overrides made in the dashboard UI
-- `logs/` — PM2 output
+- `.env` — secrets, gitignored
+- `budgets.json` — budget overrides made in the dashboard UI, gitignored
+- `logs/` — PM2 output, gitignored
 - `node_modules/` — rebuilt from the lockfile on the server
 
-> `budgets.json` is committed as a starting point for a fresh install, but the
-> live copy on the VPS is authoritative and is never overwritten by CI.
+`budgets.json` is deliberately **untracked**. It is runtime state written by
+`/api/budget`, so a tracked copy would be reverted by every deploy the moment
+someone edited a budget in the UI. The deploy script also snapshots it before
+touching the working tree and restores it afterwards, so the commit that
+untracked it could not delete it from the server.
+
+### If someone edited directly on the VPS
+
+Uncommitted changes on the server are **stashed, not discarded**, before the
+checkout moves. To get them back:
+
+```bash
+cd /opt/ben-budget-dashboard
+git stash list          # entries are named "pre-deploy <timestamp>"
+git stash pop
+```
+
+Every run also prints a one-line rollback command naming the previous commit.
 
 ---
 
