@@ -1,0 +1,87 @@
+// =====================================================
+// GEO + ACCOUNT CONFIGURATION
+// =====================================================
+// LA County = FL account (ALL campaigns EXCEPT "Pacific")
+//           + Pacific account (campaigns with "LA" in name)
+// OC        = Pacific account (campaigns with "OC" in name)
+// SJ        = Pacific account (campaigns with "SJ" in name)
+// Green V2  = Green V2 account (ALL campaigns)
+// =====================================================
+
+const GEOS = [
+  {
+    id: "la",
+    name: "LA County",
+    monthlyBudget: 50000,
+    color: "#e34948",
+    accounts: [
+      {
+        accountId: "act_598233003217290",
+        label: "FL",
+        // Include ALL campaigns EXCEPT ones with "Pacific" in name
+        excludeKeywords: ["Pacific"],
+        includeKeywords: null, // null = include all (after excludes)
+      },
+      {
+        accountId: "act_1423425976190315",
+        label: "Pacific",
+        excludeKeywords: null,
+        // Only include campaigns with "LA" in name
+        includeKeywords: ["LA"],
+      },
+    ],
+  },
+  {
+    id: "oc",
+    name: "Orange County",
+    monthlyBudget: 20000,
+    color: "#eda100",
+    accounts: [
+      {
+        accountId: "act_1423425976190315",
+        label: "Pacific",
+        excludeKeywords: null,
+        includeKeywords: ["OC"],
+      },
+    ],
+  },
+  {
+    id: "sj",
+    name: "San Jose",
+    monthlyBudget: 20000,
+    color: "#2a78d6",
+    accounts: [
+      {
+        accountId: "act_1423425976190315",
+        label: "Pacific",
+        excludeKeywords: null,
+        includeKeywords: ["SJ"],
+      },
+    ],
+  },
+  {
+    id: "green",
+    name: "Green V2 (Outdoor)",
+    monthlyBudget: 10000,
+    color: "#1baf7a",
+    accounts: [
+      {
+        accountId: "act_1281838446384778",
+        label: "Green V2",
+        excludeKeywords: null,
+        includeKeywords: null, // null = include all
+      },
+    ],
+  },
+];
+
+// Get all unique account IDs across all geos
+function getAllAccountIds() {
+  const ids = new Set();
+  GEOS.forEach((geo) => {
+    geo.accounts.forEach((acc) => ids.add(acc.accountId));
+  });
+  return Array.from(ids);
+}
+
+module.exports = { GEOS, getAllAccountIds };

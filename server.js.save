@@ -1,0 +1,486 @@
+require("dotenv").config();
+const express = require("express");
+const cron = require("node-cron");
+const fetch = require("node-fetch");
+const path = require("path");
+const fs = require("fs");
+const { GEOS, getAllAccountIds } = require("./config");
+
+const app = express();
+const PORT = process.env.PORT || 3500;
+const PIPEBOARD_API_KEY = process.env.PIPEBOARD_API_KEY;
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
+const WARN_THRESHOLD = parseInt(process.env.ALERT_WARN_THRESHOLD || "80") / 100;
+const DANGER_THRESHOLD = parseInt(process.env.ALERT_DANGER_THRESHOLD || "95") / 100;
+const REFRESH_MINUTES = parseInt(process.env.REFRESH_INTERVAL_MINUTES || "60");
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
+
+// ── In-memory data store ──
+let cachedData = null;
+let lastFetchTime = null;
+let fetchError = null;
+
+// ── Budget overrides (persisted to disk) ──
+const BUDGET_FILE = path.join(__dirname, "budgets.json");
+
+function loadBudgetOverrides() {
+  try {
+    if (fs.existsSync(BUDGET_FILE)) {
+      return JSON.parse(fs.readFileSync(BUDGET_FILE, "utf8"));
+    }
+  } catch {}
+  return {};
+}
+
+function saveBudgetOverrides(overrides) {
+  fs.writeFileSync(BUDGET_FILE, JSON.stringify(overrides, null, 2));
+}
+
+let budgetOverrides = loadBudgetOverrides();
+
+function getEffectiveBudget(geoId) {
+  if (budgetOverrides[geoId] !== undefined) return budgetOverrides[geoId];
+  const geo = GEOS.find((g) => g.id === geoId);
+  return geo ? geo.monthlyBudget : 0;
+}
+
+// ── Date helpers ──
+function getMonthStart() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function getToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getDaysInMonth() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
+function getDayOfMonth() {
+  return new Date().getDate();
+}
+
+// ── Pipeboard API call ──
+async function fetchFromPipeboard(accountIds, since, until) {
+  // Pipeboard REST API endpoint for bulk insights
+  const url = "https://api.pipeboard.co/v1/meta-ads/insights";
+
+  const body = {
+    account_ids: accountIds,
+    level: "campaign",
+    since: since,
+    until: until,
+    fields: ["spend", "impressions", "clicks", "actions", "cost_per_action_type"],
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${PIPEBOARD_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Pipeboard API error ${response.status}: ${errText}`);
+  }
+
+  return response.json();
+}
+
+// ── Alternative: Direct Meta Graph API call ──
+// If Pipeboard REST API isn't available, use Meta's Graph API directly
+// with your access token from Pipeboard
+async function fetchFromMetaDirect(accountId, since, until, accessToken) {
+  const url =
+    `https://graph.facebook.com/v21.0/${accountId}/insights?` +
+    new URLSearchParams({
+      time_range: JSON.stringify({ since, until }),
+      level: "campaign",
+      fields: "campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type",
+      limit: "500",
+      access_token: accessToken,
+    });
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Meta API error ${response.status}: ${errText}`);
+  }
+
+  return response.json();
+}
+
+// ── Categorize campaigns into geos ──
+function categorizeCampaigns(apiResults) {
+  const geoData = {};
+  GEOS.forEach((g) => {
+    geoData[g.id] = { spent: 0, leads: 0, campaigns: [] };
+  });
+
+  // apiResults can be in different formats depending on API used
+  // Normalize to array of { accountId, campaigns: [...] }
+  const accountResults = normalizeResults(apiResults);
+
+  accountResults.forEach(({ accountId, campaigns }) => {
+    campaigns.forEach((camp) => {
+      const name = camp.campaign_name || camp.name || "";
+      const spend = parseFloat(camp.spend || 0);
+
+      // Extract lead count from actions
+      let leads = 0;
+      if (camp.actions) {
+        const leadAction = camp.actions.find(
+          (a) =>
+            a.action_type === "offsite_conversion.fb_pixel_lead" ||
+            a.action_type === "lead"
+        );
+        if (leadAction) leads = parseInt(leadAction.value || 0);
+      }
+      // Fallback: calculate from cost_per_action_type
+      if (leads === 0 && camp.cost_per_action_type) {
+        const leadCpa = camp.cost_per_action_type.find(
+          (a) =>
+            a.action_type === "offsite_conversion.fb_pixel_lead" ||
+            a.action_type === "lead"
+        );
+        if (leadCpa && parseFloat(leadCpa.value) > 0) {
+          leads = Math.round(spend / parseFloat(leadCpa.value));
+        }
+      }
+
+      // Match campaign to geo based on config rules
+      GEOS.forEach((geo) => {
+        geo.accounts.forEach((accConfig) => {
+          if (accConfig.accountId !== accountId) return;
+
+          // Check excludes first
+          if (accConfig.excludeKeywords) {
+            const excluded = accConfig.excludeKeywords.some((kw) =>
+              name.toUpperCase().includes(kw.toUpperCase())
+            );
+            if (excluded) return;
+          }
+
+          // Check includes
+          if (accConfig.includeKeywords) {
+            const included = accConfig.includeKeywords.some((kw) =>
+              name.toUpperCase().includes(kw.toUpperCase())
+            );
+            if (!included) return;
+          }
+
+          // This campaign belongs to this geo
+          geoData[geo.id].spent += spend;
+          geoData[geo.id].leads += leads;
+          geoData[geo.id].campaigns.push({
+            name,
+            spend,
+            leads,
+            account: accConfig.label,
+            campaignId: camp.campaign_id || camp.id,
+          });
+        });
+      });
+    });
+  });
+
+  // Sort campaigns by spend descending
+  Object.values(geoData).forEach((g) => {
+    g.campaigns.sort((a, b) => b.spend - a.spend);
+  });
+
+  return geoData;
+}
+
+// ── Normalize API response formats ──
+function normalizeResults(apiResults) {
+  // If it's a Pipeboard bulk response with results array
+  if (apiResults.results && Array.isArray(apiResults.results)) {
+    return apiResults.results.map((r) => ({
+      accountId: r.account_id,
+      campaigns: r.insights || r.campaigns || [],
+    }));
+  }
+
+  // If it's a direct Meta response with data array
+  if (apiResults.data && Array.isArray(apiResults.data)) {
+    // Group by account
+    const grouped = {};
+    apiResults.data.forEach((row) => {
+      const accId = row.account_id || "unknown";
+      if (!grouped[accId]) grouped[accId] = [];
+      grouped[accId].push(row);
+    });
+    return Object.entries(grouped).map(([accountId, campaigns]) => ({
+      accountId,
+      campaigns,
+    }));
+  }
+
+  // If it's already normalized
+  if (Array.isArray(apiResults)) {
+    return apiResults;
+  }
+
+  return [];
+}
+
+// ── Main data fetch ──
+async function refreshData() {
+  const since = getMonthStart();
+  const until = getToday();
+  const accountIds = getAllAccountIds();
+
+  console.log(`[${new Date().toISOString()}] Fetching data: ${since} to ${until}`);
+  console.log(`  Accounts: ${accountIds.join(", ")}`);
+
+  try {
+    let apiResults;
+
+    if (PIPEBOARD_API_KEY && PIPEBOARD_API_KEY.startsWith("pb_")) {
+      // Use Pipeboard REST API
+      apiResults = await fetchFromPipeboard(accountIds, since, until);
+    } else if (PIPEBOARD_API_KEY) {
+      // Treat as Meta access token — call each account separately
+      const allResults = [];
+      for (const accId of accountIds) {
+        try {
+          const result = await fetchFromMetaDirect(accId, since, until, PIPEBOARD_API_KEY);
+          if (result.data) {
+            allResults.push({
+              accountId: accId,
+              campaigns: result.data,
+            });
+          }
+        } catch (err) {
+          console.error(`  Error fetching ${accId}: ${err.message}`);
+        }
+      }
+      apiResults = allResults;
+    } else {
+      throw new Error("No API key configured — set PIPEBOARD_API_KEY in .env");
+    }
+
+    cachedData = categorizeCampaigns(apiResults);
+    lastFetchTime = new Date().toISOString();
+    fetchError = null;
+
+    console.log(`  Success! Geo totals:`);
+    GEOS.forEach((g) => {
+      const d = cachedData[g.id];
+      const budget = getEffectiveBudget(g.id);
+      const pct = ((d.spent / budget) * 100).toFixed(1);
+      console.log(`    ${g.name}: $${d.spent.toFixed(2)} / $${budget} (${pct}%) — ${d.leads} leads`);
+    });
+
+    // Check for overspend alerts
+    await checkAlerts();
+  } catch (err) {
+    fetchError = err.message;
+    console.error(`  FETCH ERROR: ${err.message}`);
+  }
+}
+
+// ── Slack alerts ──
+async function checkAlerts() {
+  if (!SLACK_WEBHOOK || !cachedData) return;
+
+  const alerts = [];
+
+  GEOS.forEach((g) => {
+    const d = cachedData[g.id];
+    const budget = getEffectiveBudget(g.id);
+    const pct = d.spent / budget;
+
+    if (pct >= 1) {
+      const over = d.spent - budget;
+      alerts.push(
+        `:rotating_light: *${g.name}* is *$${Math.round(over).toLocaleString()} OVER* the $${budget.toLocaleString()} budget (${Math.round(pct * 100)}% spent)`
+      );
+    } else if (pct >= DANGER_THRESHOLD) {
+      alerts.push(
+        `:warning: *${g.name}* is at *${Math.round(pct * 100)}%* of budget — $${Math.round(d.spent).toLocaleString()} of $${budget.toLocaleString()}`
+      );
+    } else if (pct >= WARN_THRESHOLD) {
+      alerts.push(
+        `:eyes: *${g.name}* approaching budget — *${Math.round(pct * 100)}%* ($${Math.round(d.spent).toLocaleString()} of $${budget.toLocaleString()})`
+      );
+    }
+  });
+
+  if (alerts.length > 0) {
+    const totalSpent = Object.values(cachedData).reduce((a, d) => a + d.spent, 0);
+    const totalBudget = GEOS.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+
+    const message = {
+      text: `:bar_chart: *Ben ADU Budget Alert*\n\n${alerts.join("\n")}\n\n_Total: $${Math.round(totalSpent).toLocaleString()} / $${totalBudget.toLocaleString()} | ${new Date().toLocaleString()}_`,
+    };
+
+    try {
+      await fetch(SLACK_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+      });
+      console.log("  Slack alert sent");
+    } catch (err) {
+      console.error(`  Slack alert failed: ${err.message}`);
+    }
+  }
+}
+
+// ── Middleware ──
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+// Optional password protection
+if (DASHBOARD_PASSWORD) {
+  app.use("/api", (req, res, next) => {
+    const auth = req.headers.authorization;
+    if (auth === `Bearer ${DASHBOARD_PASSWORD}`) return next();
+    // Allow if session cookie matches
+    if (req.headers.cookie && req.headers.cookie.includes(`dash_auth=${DASHBOARD_PASSWORD}`)) return next();
+    res.status(401).json({ error: "Unauthorized" });
+  });
+}
+
+// ── API Routes ──
+
+// GET /api/dashboard — main dashboard data
+app.get("/api/dashboard", (req, res) => {
+  const today = new Date();
+  const daysInMonth = getDaysInMonth();
+  const dayOfMonth = getDayOfMonth();
+  const daysLeft = daysInMonth - dayOfMonth;
+
+  const geos = GEOS.map((g) => {
+    const data = cachedData ? cachedData[g.id] : { spent: 0, leads: 0, campaigns: [] };
+    const budget = getEffectiveBudget(g.id);
+    const remaining = Math.max(0, budget - data.spent);
+    const dailyTarget = budget / daysInMonth;
+    const actualDaily = dayOfMonth > 0 ? data.spent / dayOfMonth : 0;
+    const projectedEOM = actualDaily * daysInMonth;
+    const recDaily = daysLeft > 0 ? remaining / daysLeft : 0;
+    const cpl = data.leads > 0 ? data.spent / data.leads : 0;
+
+    let status = "on_track";
+    if (data.spent > budget) status = "over_budget";
+    else if (data.spent / budget > 0.85) status = "at_risk";
+
+    return {
+      id: g.id,
+      name: g.name,
+      color: g.color,
+      budget,
+      spent: data.spent,
+      leads: data.leads,
+      remaining,
+      daysLeft,
+      daysInMonth,
+      dayOfMonth,
+      dailyTarget,
+      actualDaily,
+      projectedEOM,
+      recDaily,
+      cpl,
+      status,
+      pctSpent: (data.spent / budget) * 100,
+      campaigns: data.campaigns || [],
+    };
+  });
+
+  const totalBudget = geos.reduce((a, g) => a + g.budget, 0);
+  const totalSpent = geos.reduce((a, g) => a + g.spent, 0);
+  const totalLeads = geos.reduce((a, g) => a + g.leads, 0);
+
+  res.json({
+    geos,
+    summary: {
+      totalBudget,
+      totalSpent,
+      totalOver: totalSpent - totalBudget,
+      totalLeads,
+      avgCpl: totalLeads > 0 ? totalSpent / totalLeads : 0,
+    },
+    meta: {
+      lastFetched: lastFetchTime,
+      error: fetchError,
+      month: today.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      refreshIntervalMinutes: REFRESH_MINUTES,
+    },
+  });
+});
+
+// POST /api/budget — update budget for a geo
+app.post("/api/budget", (req, res) => {
+  const { geoId, budget } = req.body;
+  if (!geoId || budget === undefined) {
+    return res.status(400).json({ error: "geoId and budget required" });
+  }
+  budgetOverrides[geoId] = parseFloat(budget);
+  saveBudgetOverrides(budgetOverrides);
+  res.json({ success: true, geoId, budget: budgetOverrides[geoId] });
+});
+
+// POST /api/refresh — manual refresh
+app.post("/api/refresh", async (req, res) => {
+  await refreshData();
+  res.json({ success: true, lastFetched: lastFetchTime, error: fetchError });
+});
+
+// GET /api/health — health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    lastFetched: lastFetchTime,
+    error: fetchError,
+    uptime: process.uptime(),
+  });
+});
+
+// Auth endpoint for password-protected dashboards
+app.post("/api/auth", (req, res) => {
+  if (!DASHBOARD_PASSWORD) return res.json({ success: true });
+  if (req.body.password === DASHBOARD_PASSWORD) {
+    res.setHeader("Set-Cookie", `dash_auth=${DASHBOARD_PASSWORD}; HttpOnly; Path=/; Max-Age=86400`);
+    return res.json({ success: true });
+  }
+  res.status(401).json({ error: "Wrong password" });
+});
+
+// ── Cron: auto-refresh ──
+const cronExpr = `*/${REFRESH_MINUTES} * * * *`;
+cron.schedule(cronExpr, () => {
+  console.log(`[CRON] Auto-refresh triggered`);
+  refreshData();
+});
+
+// ── Start server ──
+app.listen(PORT, async () => {
+  console.log(`\n========================================`);
+  console.log(`  Ben ADU Budget Dashboard`);
+  console.log(`  http://localhost:${PORT}`);
+  console.log(`  Auto-refresh: every ${REFRESH_MINUTES} minutes`);
+  console.log(`  Slack alerts: ${SLACK_WEBHOOK ? "enabled" : "disabled"}`);
+  console.log(`  Password: ${DASHBOARD_PASSWORD ? "enabled" : "disabled"}`);
+  console.log(`========================================\n`);
+
+  // Initial data fetch
+  await refreshData();
+});
+cd ~/Downloads
+tar -xzf ben-budget-dashboard.tar.gz
+scp ben-budget-dashboard/server.js root@37.60.238.73:/opt/ben-budget-dashboard/server.js
+
+
+ssh root@37.60.238.73
+pm2 restart ben-budget-dashboard
+pm2 logs ben-budget-dashboard --lines 20
+
