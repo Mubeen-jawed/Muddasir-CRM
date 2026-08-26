@@ -7,7 +7,29 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e8e8e8;min-height:100vh}
-.wrap{max-width:1400px;margin:0 auto;padding:24px 24px}
+.wrap{max-width:1400px;margin:0 auto;padding:24px 24px;flex:1;min-width:0}
+
+/* Sidebar — one row per account/workspace */
+.layout{display:flex;align-items:flex-start;min-height:100vh}
+.sidebar{width:230px;flex:0 0 230px;background:#0f0f0f;border-right:1px solid rgba(255,255,255,0.07);padding:24px 12px;position:sticky;top:0;min-height:100vh}
+.sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#555;padding:0 10px;margin-bottom:12px;font-weight:600}
+.ws-row{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:9px;border:1px solid transparent;background:transparent;color:#bbb;cursor:pointer;font-family:inherit;margin-bottom:4px;transition:all 0.15s}
+.ws-row:hover{background:rgba(255,255,255,0.05);color:#e8e8e8}
+.ws-row.active{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);color:#fff}
+.ws-name{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ws-count{font-size:11px;color:#666;font-weight:500}
+.ws-meta{font-size:11px;color:#666;margin-top:3px}
+.ws-row.active .ws-meta{color:#8a8a8a}
+.ws-bar{height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:7px;overflow:hidden}
+.ws-bar span{display:block;height:100%;border-radius:2px;background:#2a78d6;transition:width 0.3s}
+.ws-bar span.warn{background:#eda100}
+.ws-bar span.danger{background:#e34948}
+@media(max-width:820px){
+  .layout{flex-direction:column}
+  .sidebar{width:100%;flex:none;min-height:0;border-right:none;border-bottom:1px solid rgba(255,255,255,0.07);position:static;display:flex;gap:8px;overflow-x:auto;padding:12px}
+  .sidebar-title{display:none}
+  .ws-row{min-width:190px;margin-bottom:0;flex:0 0 auto}
+}
 
 /* Header */
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px}
@@ -155,7 +177,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
-<div class="wrap" id="dashboard" style="display:none">
+<div class="layout" id="dashboard" style="display:none">
+
+<aside class="sidebar">
+  <div class="sidebar-title">Accounts</div>
+  <div id="wsList"></div>
+</aside>
+
+<div class="wrap">
   <div class="header">
     <div>
       <h1>Budget pacing</h1>
@@ -186,6 +215,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     Hover any metric (the small <strong>?</strong> icon) to see exactly what it means.
   </div>
 </div>
+</div>
 
 <script>
 const API_BASE = '';
@@ -207,8 +237,53 @@ async function doSignOut() {
   toLogin();
 }
 
+// ── Workspaces (sidebar) ──
+let workspaces = [];
+let currentWorkspace = localStorage.getItem('ws') || null;
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function fetchWorkspaces() {
+  const res = await fetch(`${API_BASE}/api/workspaces`, { credentials: 'same-origin' });
+  if (res.status === 401) { toLogin(); return null; }
+  return res.json();
+}
+
+function renderSidebar() {
+  const el = document.getElementById('wsList');
+  if (!el) return;
+  el.innerHTML = workspaces.map((w) => {
+    const pct = Math.round(w.pctSpent || 0);
+    const cls = pct >= 95 ? 'danger' : pct >= 80 ? 'warn' : '';
+    const active = w.id === currentWorkspace ? ' active' : '';
+    return `<button class="ws-row${active}" data-ws="${esc(w.id)}" title="${esc(w.name)}">
+      <div class="ws-name"><span>${esc(w.name)}</span><span class="ws-count">${w.geoCount}</span></div>
+      <div class="ws-meta">${Math.round(w.spent).toLocaleString()} / ${Math.round(w.budget).toLocaleString()} · ${pct}%</div>
+      <div class="ws-bar"><span class="${cls}" style="width:${Math.min(100, pct)}%"></span></div>
+    </button>`;
+  }).join('');
+}
+
+async function switchWorkspace(id) {
+  if (!id || id === currentWorkspace) return;
+  currentWorkspace = id;
+  localStorage.setItem('ws', id);
+  renderSidebar();
+  await loadData();
+}
+
+// Delegated so the rows survive every re-render without rebinding.
+document.addEventListener('click', (e) => {
+  const row = e.target.closest && e.target.closest('.ws-row');
+  if (row) switchWorkspace(row.dataset.ws);
+});
+
 async function fetchDashboard() {
-  const res = await fetch(`${API_BASE}/api/dashboard`, { credentials: 'same-origin' });
+  const qs = currentWorkspace ? `?workspace=${encodeURIComponent(currentWorkspace)}` : '';
+  const res = await fetch(`${API_BASE}/api/dashboard${qs}`, { credentials: 'same-origin' });
   if (res.status === 401) {
     toLogin();
     return null;
@@ -549,7 +624,8 @@ function toggleCampaigns(geoId) {
 function render() {
   if (!dashData) return;
 
-  document.getElementById('monthLabel').textContent = `Ben ADU — ${dashData.meta.month}`;
+  document.getElementById('monthLabel').textContent =
+    `${dashData.meta.workspaceName || 'Ben ADU'} — ${dashData.meta.month}`;
   document.getElementById('alerts').innerHTML = renderAlerts(dashData.geos);
   document.getElementById('summary').innerHTML = renderSummary(dashData.summary, dashData.geos);
   document.getElementById('geoCards').innerHTML = dashData.geos.map(renderGeoCard).join('');
@@ -567,7 +643,9 @@ function render() {
 }
 
 async function loadData() {
-  dashData = await fetchDashboard();
+  const [data, ws] = await Promise.all([fetchDashboard(), fetchWorkspaces()]);
+  dashData = data;
+  if (ws) { workspaces = ws.workspaces; renderSidebar(); }
   if (dashData) render();
 }
 
@@ -575,12 +653,24 @@ async function init() {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('dashboard').style.display = 'none';
 
+  const ws = await fetchWorkspaces();
+  if (ws) {
+    workspaces = ws.workspaces;
+    // A workspace remembered from a previous visit may since have been
+    // renamed or removed from config.js — fall back rather than 404.
+    if (!currentWorkspace || !workspaces.some((w) => w.id === currentWorkspace)) {
+      currentWorkspace = ws.active;
+      localStorage.setItem('ws', currentWorkspace);
+    }
+    renderSidebar();
+  }
+
   dashData = await fetchDashboard();
 
   document.getElementById('loading').style.display = 'none';
 
   if (dashData) {
-    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'flex';
     render();
   }
 

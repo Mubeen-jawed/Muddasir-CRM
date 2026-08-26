@@ -4,7 +4,15 @@ const cron = require("node-cron");
 const fetch = require("node-fetch");
 const path = require("path");
 const fs = require("fs");
-const { GEOS, getAllAccountIds } = require("./config");
+const {
+  WORKSPACES,
+  GEOS,
+  DEFAULT_WORKSPACE,
+  getAllAccountIds,
+  getWorkspace,
+  getGeos,
+  getSlackGeos,
+} = require("./config");
 const auth = require("./auth");
 
 const app = express();
@@ -424,7 +432,7 @@ async function checkAlerts() {
 
   const alerts = [];
 
-  GEOS.forEach((g) => {
+  getSlackGeos().forEach((g) => {
     const d = cachedData[g.id];
     const budget = getEffectiveBudget(g.id);
     const pct = d.spent / budget;
@@ -447,7 +455,7 @@ async function checkAlerts() {
 
   if (alerts.length > 0) {
     const totalSpent = Object.values(cachedData).reduce((a, d) => a + d.spent, 0);
-    const totalBudget = GEOS.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+    const totalBudget = getSlackGeos().reduce((a, g) => a + getEffectiveBudget(g.id), 0);
 
     const message = {
       text: `:bar_chart: *Ben ADU Budget Alert*\n\n${alerts.join("\n")}\n\n_Total: $${Math.round(totalSpent).toLocaleString()} / $${totalBudget.toLocaleString()} | ${new Date().toLocaleString()}_`,
@@ -477,7 +485,7 @@ async function postDailyLeadSummary() {
     const raw = await fetchInsights(accountIds, today, today);
     const geoData = categorizeCampaigns(raw);
 
-    const lines = GEOS.map((g) => {
+    const lines = getSlackGeos().map((g) => {
       const d = geoData[g.id];
       const cpl = d.leads > 0 ? (d.spent / d.leads).toFixed(2) : "—";
       return `• *${g.name}*: *${d.leads} leads*  |  $${d.spent.toFixed(2)} spent  |  CPL $${cpl}`;
@@ -520,7 +528,7 @@ async function postWeeklyPacingCheck() {
   const dayOfMonth = getDayOfMonth();
   const monthProgress = dayOfMonth / daysInMonth;
 
-  const items = GEOS.map((g) => {
+  const items = getSlackGeos().map((g) => {
     const d = cachedData[g.id];
     const budget = getEffectiveBudget(g.id);
     const spent = d.spent;
@@ -643,7 +651,7 @@ async function postWeeklyResultsSummary() {
     let totalThisSpend = 0, totalThisLeads = 0, totalPriorSpend = 0, totalPriorLeads = 0;
     const geoBlocks = [];
 
-    for (const g of GEOS) {
+    for (const g of getSlackGeos()) {
       const t = thisGeo[g.id];
       const p = priorGeo[g.id];
       const tSpend = t.spent, tLeads = t.leads;
@@ -713,8 +721,8 @@ async function postWeeklyResultsSummary() {
     const totalLeadDelta = pct(totalThisLeads, totalPriorLeads);
     const totalCplDelta = priorTotalCpl > 0 && totalCpl > 0 ? ((totalCpl - priorTotalCpl) / priorTotalCpl) * 100 : 0;
 
-    const totalBudget = GEOS.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
-    const totalMtd = GEOS.reduce((a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0), 0);
+    const totalBudget = getSlackGeos().reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+    const totalMtd = getSlackGeos().reduce((a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0), 0);
     const totalMtdPct = totalBudget > 0 ? (totalMtd / totalBudget) * 100 : 0;
     const totalProjectedEOM = (totalThisSpend / 7) * daysInMonth;
     const totalProjDelta = totalProjectedEOM - totalBudget;
@@ -851,6 +859,29 @@ app.use(express.static(path.join(__dirname, "public"), {
 
 // ── API Routes ──
 
+// GET /api/workspaces — sidebar rows, with a live spend total per workspace
+app.get("/api/workspaces", (req, res) => {
+  res.json({
+    workspaces: WORKSPACES.map((w) => {
+      const geos = getGeos(w.id);
+      const spent = geos.reduce(
+        (a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0),
+        0
+      );
+      const budget = geos.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+      return {
+        id: w.id,
+        name: w.name,
+        geoCount: geos.length,
+        spent,
+        budget,
+        pctSpent: budget > 0 ? (spent / budget) * 100 : 0,
+      };
+    }),
+    active: DEFAULT_WORKSPACE,
+  });
+});
+
 // GET /api/dashboard — main dashboard data
 app.get("/api/dashboard", (req, res) => {
   const today = new Date();
@@ -858,7 +889,9 @@ app.get("/api/dashboard", (req, res) => {
   const dayOfMonth = getDayOfMonth();
   const daysLeft = daysInMonth - dayOfMonth;
 
-  const geos = GEOS.map((g) => {
+  const wsId = getWorkspace(String(req.query.workspace || "")) ? String(req.query.workspace) : DEFAULT_WORKSPACE;
+
+  const geos = getGeos(wsId).map((g) => {
     const data = cachedData ? cachedData[g.id] : { spent: 0, leads: 0, campaigns: [] };
     const weekData = cachedWeekData ? cachedWeekData[g.id] : null;
     const budget = getEffectiveBudget(g.id);
@@ -931,6 +964,8 @@ app.get("/api/dashboard", (req, res) => {
       error: fetchError,
       month: today.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
       refreshIntervalMinutes: REFRESH_MINUTES,
+      workspace: wsId,
+      workspaceName: (getWorkspace(wsId) || {}).name || wsId,
     },
   });
 });

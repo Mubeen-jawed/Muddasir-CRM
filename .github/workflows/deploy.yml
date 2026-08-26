@@ -14,9 +14,39 @@ jobs:
   deploy:
     name: Update and reload
     runs-on: ubuntu-latest
+    # Without this a bad host or rejected key can sit pending until the
+    # runner's own limit kills it ~6 hours later.
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
+
+      # These must be repository SECRETS, not Variables — the two live on the
+      # same settings page as separate tabs, and ${{ secrets.* }} reads only
+      # the Secrets tab. Values put in Variables resolve to empty here, which
+      # would otherwise show up as ssh hanging on an empty hostname.
+      - name: Check required secrets are set
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PATH: ${{ secrets.VPS_PATH }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          missing=""
+          for name in VPS_HOST VPS_USER VPS_PATH VPS_SSH_KEY; do
+            [ -z "${!name:-}" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Settings -> Secrets and variables -> Actions -> Secrets tab -> New repository secret."
+            echo "Note: the Variables tab will NOT work; this workflow reads secrets.*"
+            exit 1
+          fi
+          case "$VPS_SSH_KEY" in
+            *"BEGIN "*"PRIVATE KEY"*) ;;
+            *) echo "::error::VPS_SSH_KEY does not look like a private key. Paste the whole file including the BEGIN/END lines (not the .pub)."; exit 1 ;;
+          esac
+          echo "All required secrets present."
 
       - uses: actions/setup-node@v4
         with:
@@ -42,7 +72,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -p "${VPS_PORT:-22}" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if ! ssh-keyscan -T 15 -p "${VPS_PORT:-22}" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+            echo "::error::Could not reach $VPS_HOST:${VPS_PORT:-22}. Check VPS_HOST/VPS_PORT and that the firewall allows GitHub runners."
+            exit 1
+          fi
+          # BatchMode stops ssh falling back to an interactive password prompt,
+          # which is what turns a rejected key into a silent hang.
+          echo "Host deploy-target" >> ~/.ssh/config
+          echo "  BatchMode yes" >> ~/.ssh/config
+          echo "  ConnectTimeout 15" >> ~/.ssh/config
+          echo "  ServerAliveInterval 15" >> ~/.ssh/config
 
       # The VPS is itself a git clone that people commit from, so the deploy
       # updates it with git rather than overwriting files underneath it.
@@ -55,5 +94,6 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_PATH: ${{ secrets.VPS_PATH }}
         run: |
-          ssh -i ~/.ssh/id_deploy -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" \
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 \
+            -i ~/.ssh/id_deploy -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" \
             "VPS_PATH='$VPS_PATH' SHA='${{ github.sha }}' bash -s" < scripts/vps-deploy.sh
