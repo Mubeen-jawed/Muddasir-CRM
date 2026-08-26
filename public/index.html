@@ -97,8 +97,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .camp-row:last-child{border-bottom:none}
 .camp-header{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;padding:6px 0 4px;border-bottom:1px solid rgba(255,255,255,0.08)}
 .camp-name{color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-.camp-stats{display:flex;gap:16px;flex-shrink:0}
-.camp-stats span{min-width:60px;text-align:right}
+.camp-stats{display:flex;gap:12px;flex-shrink:0}
+.camp-stats span{min-width:52px;text-align:right}
 
 /* Budget edit */
 .budget-edit{display:flex;align-items:center;gap:4px}
@@ -408,18 +408,31 @@ function renderGeoCard(g) {
           <span>Spent</span>
           <span>Leads</span>
           <span>Cost/lead</span>
+          <span>CTR</span>
+          <span>Click→lead</span>
+          <span>Freq.</span>
         </div>
       </div>` +
-      g.campaigns.map(c => `
+      g.campaigns.map(c => {
+        const c2l = c.clickToLead != null ? c.clickToLead : (c.clicks > 0 ? (c.leads / c.clicks) * 100 : 0);
+        const ctr = c.ctr != null ? c.ctr : (c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0);
+        const freq = c.frequency || 0;
+        const freqColor = freq >= 6 ? '#e34948' : freq >= 4 ? '#eda100' : '#888';
+        const c2lColor = c2l > 0 && c2l < 1 ? '#e34948' : c2l > 0 && c2l < 3 ? '#eda100' : '#888';
+        const ctrColor = ctr > 0 && ctr < 1 ? '#e34948' : ctr > 0 && ctr < 2 ? '#eda100' : '#888';
+        return `
         <div class="camp-row">
           <span class="camp-name" title="${c.name}">${c.name}</span>
           <div class="camp-stats">
             <span style="color:#e8e8e8">${fmt(c.spend)}</span>
             <span style="color:#888">${c.leads}</span>
             <span style="color:#666">${c.leads > 0 ? fmtDec(c.spend / c.leads) : '—'}</span>
+            <span style="color:${ctrColor}">${ctr > 0 ? ctr.toFixed(2) + '%' : '—'}</span>
+            <span style="color:${c2lColor}">${c2l > 0 ? c2l.toFixed(1) + '%' : '—'}</span>
+            <span style="color:${freqColor}">${freq > 0 ? freq.toFixed(2) + 'x' : '—'}</span>
           </div>
-        </div>
-      `).join('') + '</div>';
+        </div>`;
+      }).join('') + '</div>';
   }
 
   return `
@@ -485,6 +498,26 @@ function renderGeoCard(g) {
         <div class="metric" title="Cost Per Lead — average ad spend to generate one lead (spent ÷ leads)">
           <div class="metric-label">Cost per lead <span class="info">?</span></div>
           <div class="metric-val">${g.cpl > 0 ? fmtDec(g.cpl) : '—'}</div>
+        </div>
+        <div class="metric" title="Total leads generated over the last 7 days. Complements 'Leads this month' by showing recent velocity — a slowdown here means today's ads are working less than earlier this month.">
+          <div class="metric-label">Leads (last 7d) <span class="info">?</span></div>
+          <div class="metric-val">${(g.weekLeads || 0).toLocaleString()}</div>
+          <div class="metric-sub">${g.weekLeads > 0 && g.leads > 0 ? Math.round((g.weekLeads / g.leads) * 100) + '% of monthly total' : ''}</div>
+        </div>
+        <div class="metric" title="Landing page conversion rate — % of ad clicks that turned into leads. Below 3% suggests LP needs work; above 10% is strong for lead-gen. This is your funnel's bottom half.">
+          <div class="metric-label">Click-to-lead <span class="info">?</span></div>
+          <div class="metric-val ${g.clickToLead > 0 && g.clickToLead < 1 ? 'val-danger' : g.clickToLead > 0 && g.clickToLead < 3 ? 'val-warn' : ''}">${g.clickToLead > 0 ? g.clickToLead.toFixed(1) + '%' : '—'}</div>
+          <div class="metric-sub">${g.clicks > 0 ? g.leads.toLocaleString() + ' / ' + g.clicks.toLocaleString() + ' clicks' : ''}</div>
+        </div>
+        <div class="metric" title="Click-through rate — % of impressions that turned into clicks. The media buyer's #1 creative-health metric. Below 1% = weak hook; above 2% = strong ad creative. Drops before CPL rises, so use it as an early warning.">
+          <div class="metric-label">Click-through rate <span class="info">?</span></div>
+          <div class="metric-val ${g.ctr > 0 && g.ctr < 1 ? 'val-danger' : g.ctr > 0 && g.ctr < 2 ? 'val-warn' : ''}">${g.ctr > 0 ? g.ctr.toFixed(2) + '%' : '—'}</div>
+          <div class="metric-sub">${g.impressions > 0 ? g.clicks.toLocaleString() + ' / ' + g.impressions.toLocaleString() + ' views' : ''}</div>
+        </div>
+        <div class="metric" title="Frequency — how many times the average person has seen your ads. Above 4 = creative fatigue setting in; above 6 = refresh creatives now. Combined with CTR: falling CTR + high freq = audience tired; falling CTR + low freq = weak creative.">
+          <div class="metric-label">Frequency <span class="info">?</span></div>
+          <div class="metric-val ${g.frequency >= 6 ? 'val-danger' : g.frequency >= 4 ? 'val-warn' : ''}">${g.frequency > 0 ? g.frequency.toFixed(2) + 'x' : '—'}</div>
+          <div class="metric-sub">${g.frequency >= 6 ? 'creative burned — refresh' : g.frequency >= 4 ? 'fatigue creeping in' : g.frequency > 0 ? 'fresh audience' : ''}</div>
         </div>
       </div>
 

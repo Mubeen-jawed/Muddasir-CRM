@@ -99,7 +99,7 @@ function getDayOfMonth() {
 // either a long-lived user token (~60 days) or a System User token (never
 // expires). Both are read with the ads_read scope; neither changes this code.
 const INSIGHT_FIELDS =
-  "campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type";
+  "campaign_id,campaign_name,spend,impressions,clicks,reach,frequency,actions,cost_per_action_type";
 
 function metaError(accountId, status, body) {
   const err = (body && body.error) || {};
@@ -254,7 +254,7 @@ async function postTokenWarning() {
 function categorizeCampaigns(apiResults) {
   const geoData = {};
   GEOS.forEach((g) => {
-    geoData[g.id] = { spent: 0, leads: 0, campaigns: [] };
+    geoData[g.id] = { spent: 0, leads: 0, impressions: 0, clicks: 0, reach: 0, campaigns: [] };
   });
 
   // apiResults can be in different formats depending on API used
@@ -310,12 +310,25 @@ function categorizeCampaigns(apiResults) {
           }
 
           // This campaign belongs to this geo
+          const impressions = parseInt(camp.impressions || 0, 10);
+          const clicks = parseInt(camp.clicks || 0, 10);
+          const reach = parseInt(camp.reach || 0, 10);
+          const frequency = parseFloat(camp.frequency || 0);
           geoData[geo.id].spent += spend;
           geoData[geo.id].leads += leads;
+          geoData[geo.id].impressions += impressions;
+          geoData[geo.id].clicks += clicks;
+          geoData[geo.id].reach += reach;
           geoData[geo.id].campaigns.push({
             name,
             spend,
             leads,
+            impressions,
+            clicks,
+            reach,
+            frequency,
+            clickToLead: clicks > 0 ? (leads / clicks) * 100 : 0,
+            ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
             account: accConfig.label,
             campaignId: camp.campaign_id || camp.id,
           });
@@ -842,6 +855,15 @@ app.get("/api/dashboard", (req, res) => {
       projectedEOM,    // projected using weekDaily
       recDaily,
       cpl,
+      // Landing-page + fatigue + creative-health metrics
+      impressions: data.impressions || 0,
+      clicks: data.clicks || 0,
+      reach: data.reach || 0,
+      frequency: (data.reach || 0) > 0 ? (data.impressions || 0) / data.reach : 0,
+      ctr: (data.impressions || 0) > 0 ? ((data.clicks || 0) / data.impressions) * 100 : 0,
+      clickToLead: (data.clicks || 0) > 0 ? (data.leads / data.clicks) * 100 : 0,
+      // Trailing 7-day lead volume for velocity tracking
+      weekLeads: weekData ? weekData.leads : 0,
       status,
       pctSpent: (data.spent / budget) * 100,
       campaigns: data.campaigns || [],
