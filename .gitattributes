@@ -1,0 +1,16 @@
+# Default: let Git normalize text files to LF in the repository.
+* text=auto
+
+# These run on Linux. CRLF would break them outright — bash reports
+# "$'\r': command not found" and the shebang line fails to resolve.
+*.sh            text eol=lf
+deploy.sh       text eol=lf
+deploy-remote.sh text eol=lf
+
+# Parsed by CI on Linux.
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+# Keep server-side JS and config LF regardless of who commits.
+*.js            text eol=lf
+*.json          text eol=lf
