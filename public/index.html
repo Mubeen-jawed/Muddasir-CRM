@@ -2,168 +2,316 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
 <title>Ben ADU — Budget Pacing</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e8e8e8;min-height:100vh}
-.wrap{max-width:1400px;margin:0 auto;padding:24px 24px;flex:1;min-width:0}
-
-/* Sidebar — one row per account/workspace */
-.layout{display:flex;align-items:flex-start;min-height:100vh}
-.sidebar{width:230px;flex:0 0 230px;background:#0f0f0f;border-right:1px solid rgba(255,255,255,0.07);padding:24px 12px;position:sticky;top:0;min-height:100vh}
-.sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#555;padding:0 10px;margin-bottom:12px;font-weight:600}
-.ws-row{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:9px;border:1px solid transparent;background:transparent;color:#bbb;cursor:pointer;font-family:inherit;margin-bottom:4px;transition:all 0.15s}
-.ws-row:hover{background:rgba(255,255,255,0.05);color:#e8e8e8}
-.ws-row.active{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);color:#fff}
-.ws-name{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.ws-count{font-size:11px;color:#666;font-weight:500}
-.ws-meta{font-size:11px;color:#666;margin-top:3px}
-.ws-row.active .ws-meta{color:#8a8a8a}
-.ws-bar{height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:7px;overflow:hidden}
-.ws-bar span{display:block;height:100%;border-radius:2px;background:#2a78d6;transition:width 0.3s}
-.ws-bar span.warn{background:#eda100}
-.ws-bar span.danger{background:#e34948}
-@media(max-width:820px){
-  .layout{flex-direction:column}
-  .sidebar{width:100%;flex:none;min-height:0;border-right:none;border-bottom:1px solid rgba(255,255,255,0.07);position:static;display:flex;gap:8px;overflow-x:auto;padding:12px}
-  .sidebar-title{display:none}
-  .ws-row{min-width:190px;margin-bottom:0;flex:0 0 auto}
+/* ── Design tokens ── */
+:root{
+  --bg:#0a0a0a;
+  --panel:#141414;
+  --panel-alt:#0f0f0f;
+  --line:rgba(255,255,255,0.07);
+  --line-soft:rgba(255,255,255,0.06);
+  --text:#e8e8e8;
+  --muted:#888;
+  --dim:#666;
+  --faint:#555;
+  --ok:#1baf7a;
+  --warn:#eda100;
+  --danger:#e34948;
+  --info:#2a78d6;
+  --topbar-h:56px;
+  --sidebar-w:230px;
+  /* One gutter drives every edge, so the page breathes with the viewport */
+  --gutter:clamp(14px,3.2vw,40px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
 }
 
-/* Header */
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:clip}
+img,svg{max-width:100%}
+:focus-visible{outline:2px solid #6aadf0;outline-offset:2px}
+
+.wrap{
+  max-width:1400px;margin:0 auto;flex:1;min-width:0;
+  padding:24px calc(var(--gutter) + var(--safe-r)) calc(32px + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+}
+
+/* ── Layout shell ── */
+.layout{display:flex;align-items:flex-start;min-height:100vh}
+
+/* ── Sidebar — one row per account/workspace ── */
+.sidebar{
+  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--panel-alt);
+  border-right:1px solid var(--line);padding:24px 12px;
+  position:sticky;top:0;min-height:100vh;max-height:100vh;overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+.sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--faint);padding:0 10px;margin-bottom:12px;font-weight:600}
+.sidebar-head{display:none}
+.sidebar-foot{margin-top:auto;padding:12px 4px 0;border-top:1px solid var(--line);display:none}
+.ws-row{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:9px;border:1px solid transparent;background:transparent;color:#bbb;cursor:pointer;font-family:inherit;margin-bottom:4px;transition:background 0.15s,color 0.15s,border-color 0.15s}
+.ws-row:hover{background:rgba(255,255,255,0.05);color:var(--text)}
+.ws-row.active{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14);color:#fff}
+.ws-name{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ws-name > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-count{font-size:11px;color:var(--dim);font-weight:500;flex-shrink:0}
+.ws-meta{font-size:11px;color:var(--dim);margin-top:3px}
+.ws-row.active .ws-meta{color:#8a8a8a}
+.ws-bar{height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:7px;overflow:hidden}
+.ws-bar span{display:block;height:100%;border-radius:2px;background:var(--info);transition:width 0.3s}
+.ws-bar span.warn{background:var(--warn)}
+.ws-bar span.danger{background:var(--danger)}
+
+/* ── Mobile top bar + hamburger (hidden on desktop) ── */
+.topbar{display:none}
+.hamburger{
+  width:42px;height:42px;flex:0 0 42px;display:inline-flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:5px;border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);
+  cursor:pointer;padding:0;
+}
+.hamburger:hover{background:rgba(255,255,255,0.1)}
+.hamburger span{display:block;width:18px;height:2px;border-radius:2px;background:var(--text);transition:transform 0.22s ease,opacity 0.18s ease}
+body.nav-open .hamburger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+body.nav-open .hamburger span:nth-child(2){opacity:0}
+body.nav-open .hamburger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.topbar-title{font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.2px;line-height:1.2}
+.topbar-ws{font-size:11px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-text{min-width:0;flex:1}
+.nav-scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:70;
+  opacity:0;pointer-events:none;transition:opacity 0.22s ease;
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+}
+body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
+.sidebar-close{
+  width:36px;height:36px;flex:0 0 36px;border-radius:9px;border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.05);color:var(--text);font-size:18px;line-height:1;cursor:pointer;font-family:inherit;
+}
+.sidebar-close:hover{background:rgba(255,255,255,0.1)}
+
+@media(max-width:900px){
+  .topbar{
+    display:flex;align-items:center;gap:12px;
+    position:fixed;top:0;left:0;right:0;z-index:60;
+    min-height:var(--topbar-h);
+    padding:calc(8px + var(--safe-t)) calc(14px + var(--safe-r)) 8px calc(14px + var(--safe-l));
+    background:rgba(10,10,10,0.92);border-bottom:1px solid var(--line);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);backdrop-filter:saturate(140%) blur(10px);
+  }
+  /* Drawer: off-canvas, slides in over the content */
+  .sidebar{
+    position:fixed;top:0;left:0;bottom:0;z-index:80;
+    width:min(84vw,300px);flex-basis:auto;max-height:none;height:100%;
+    padding:calc(14px + var(--safe-t)) 12px calc(14px + var(--safe-b));
+    transform:translateX(-101%);transition:transform 0.26s cubic-bezier(0.4,0,0.2,1);
+    box-shadow:0 0 40px rgba(0,0,0,0.6);
+  }
+  body.nav-open .sidebar{transform:translateX(0)}
+  .sidebar-title{display:none}
+  .sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;padding:0 2px}
+  .sidebar-heading{font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:0.08em}
+  .sidebar-foot{display:block}
+  .ws-row{padding:12px}
+  /* Clear the fixed bar */
+  .wrap{padding-top:calc(var(--topbar-h) + var(--safe-t) + 14px)}
+  .header .btn-signout{display:none}
+}
+/* Never leave the drawer stranded open when the layout goes wide */
+@media(min-width:901px){
+  .sidebar{transform:none !important}
+  .nav-scrim{display:none}
+}
+
+/* ── Header ── */
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px}
-.header h1{font-size:22px;font-weight:700;letter-spacing:-0.5px;color:#fff}
-.header .sub{font-size:13px;color:#666;margin-top:4px}
-.header-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.btn{font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.08);color:#e8e8e8;cursor:pointer;transition:all 0.15s}
-.btn:hover{background:rgba(255,255,255,0.14)}
+.header > div:first-child{min-width:0}
+.header h1{font-size:clamp(20px,2.4vw,26px);font-weight:700;letter-spacing:-0.5px;color:#fff;line-height:1.2}
+.header .sub{font-size:13px;color:var(--dim);margin-top:4px}
+.header-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:0}
+.header-buttons{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn{font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.08);color:var(--text);cursor:pointer;transition:background 0.15s;font-family:inherit}
+.btn:hover:not(:disabled){background:rgba(255,255,255,0.14)}
 .btn:disabled{opacity:0.4;cursor:not-allowed}
 .btn-sm{font-size:11px;padding:3px 8px;border-radius:6px}
-.btn-save{background:#1baf7a;border-color:#1baf7a;color:#fff}
-.btn-save:hover{background:#17a06e}
+.btn-save{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn-save:hover:not(:disabled){background:#17a06e}
+.btn-block{display:block;width:100%;text-align:center;padding:10px 14px;font-size:12px}
 
-/* Last-updated live indicator */
-.live-badge{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:20px;background:#141414;border:1px solid rgba(255,255,255,0.08);font-size:12px;color:#aaa;cursor:default;transition:all 0.2s}
+/* ── Last-updated live indicator ── */
+.live-badge{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:20px;background:var(--panel);border:1px solid rgba(255,255,255,0.08);font-size:12px;color:#aaa;cursor:default;transition:border-color 0.2s;max-width:100%}
 .live-badge:hover{border-color:rgba(255,255,255,0.16)}
-.live-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#1baf7a;box-shadow:0 0 0 0 rgba(27,175,122,0.6);animation:live-pulse 2.4s ease-in-out infinite}
+.live-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--ok);box-shadow:0 0 0 0 rgba(27,175,122,0.6);animation:live-pulse 2.4s ease-in-out infinite}
 .live-badge[data-state="stale"]{color:#f0c060}
-.live-badge[data-state="stale"] .live-dot{background:#eda100;box-shadow:0 0 0 0 rgba(237,161,0,0.6);animation-duration:3s}
+.live-badge[data-state="stale"] .live-dot{background:var(--warn);box-shadow:0 0 0 0 rgba(237,161,0,0.6);animation-duration:3s}
 .live-badge[data-state="dead"]{color:#f08080}
-.live-badge[data-state="dead"] .live-dot{background:#e34948;box-shadow:0 0 0 0 rgba(227,73,72,0.6);animation:none;opacity:0.9}
+.live-badge[data-state="dead"] .live-dot{background:var(--danger);box-shadow:0 0 0 0 rgba(227,73,72,0.6);animation:none;opacity:0.9}
 .live-badge[data-state="loading"] .live-dot{background:#6aadf0;box-shadow:0 0 0 0 rgba(106,173,240,0.6);animation-duration:1s}
 .live-badge[data-state="loading"]{color:#6aadf0}
-.live-time{color:inherit;font-variant-numeric:tabular-nums}
-.live-label{font-weight:600;letter-spacing:0.2px}
+.live-time{color:inherit;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-label{font-weight:600;letter-spacing:0.2px;flex-shrink:0}
 @keyframes live-pulse{
   0%{box-shadow:0 0 0 0 rgba(27,175,122,0.55)}
   70%{box-shadow:0 0 0 8px rgba(27,175,122,0)}
   100%{box-shadow:0 0 0 0 rgba(27,175,122,0)}
 }
 
-/* Alerts */
+/* ── Alerts ── */
 .alert{padding:12px 16px;border-radius:10px;margin-bottom:12px;font-size:13px;display:flex;align-items:flex-start;gap:10px;line-height:1.4}
+.alert > div{min-width:0}
 .alert-danger{background:rgba(227,73,72,0.08);border:1px solid rgba(227,73,72,0.2);color:#f08080}
 .alert-warn{background:rgba(237,161,0,0.08);border:1px solid rgba(237,161,0,0.2);color:#f0c060}
 .alert-info{background:rgba(42,120,214,0.08);border:1px solid rgba(42,120,214,0.2);color:#6aadf0}
 .alert-icon{font-size:18px;flex-shrink:0;line-height:1}
 .alert strong{font-weight:600}
 
-/* Summary cards */
-.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-.stat{padding:14px 18px;border-radius:10px;background:#141414;border:1px solid rgba(255,255,255,0.06)}
-.stat-label{font-size:12px;color:#666;margin-bottom:4px}
-.stat-val{font-size:22px;font-weight:700}
-.stat-val.over{color:#e34948}
-.stat-val.under{color:#1baf7a}
-.stat-val.under-warn{color:#2a78d6}
-.stat-sub{font-size:10px;color:#666;margin-top:3px}
+/* ── Summary cards ── */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin-bottom:20px}
+.stat{padding:14px 18px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft);min-width:0}
+.stat-label{font-size:12px;color:var(--dim);margin-bottom:4px}
+.stat-val{font-size:clamp(19px,2.1vw,24px);font-weight:700;overflow-wrap:anywhere}
+.stat-val.over{color:var(--danger)}
+.stat-val.under{color:var(--ok)}
+.stat-val.under-warn{color:var(--info)}
+.stat-sub{font-size:10px;color:var(--dim);margin-top:3px}
 
-/* Geo cards */
+/* ── Geo cards ── */
 .geo-grid{display:grid;grid-template-columns:1fr;gap:14px}
-.geo-card{background:#141414;border-radius:12px;padding:18px 20px;border:1px solid rgba(255,255,255,0.06);transition:border-color 0.2s;display:flex;flex-direction:column}
+.geo-card{background:var(--panel);border-radius:var(--radius);padding:18px clamp(14px,2vw,20px);border:1px solid var(--line-soft);transition:border-color 0.2s;display:flex;flex-direction:column;min-width:0}
 .geo-card.over-budget{border-color:rgba(227,73,72,0.3)}
 .geo-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
-.geo-name{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600}
+.geo-name{display:flex;align-items:center;gap:10px;font-size:clamp(15px,1.4vw,17px);font-weight:600;min-width:0}
 .geo-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.geo-actions{display:flex;align-items:center;gap:8px}
+.geo-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
-/* Status badge */
-.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;letter-spacing:0.3px}
-.badge-ok{background:#1baf7a;color:#fff}
-.badge-warn{background:#eda100;color:#412402}
-.badge-over{background:#e34948;color:#fff}
-.badge-under{background:#2a78d6;color:#fff}
+/* ── Status badge ── */
+.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;letter-spacing:0.3px;white-space:nowrap}
+.badge-ok{background:var(--ok);color:#fff}
+.badge-warn{background:var(--warn);color:#412402}
+.badge-over{background:var(--danger);color:#fff}
+.badge-under{background:var(--info);color:#fff}
 
-/* Progress bar */
-.bar-wrap{height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-bottom:4px}
+/* ── Progress bar ── */
+.bar-wrap{height:6px;border-radius:3px;background:var(--line-soft);overflow:hidden;margin-bottom:4px}
 .bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
-.bar-label{display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:6px}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px;gap:10px;flex-wrap:wrap}
 
-/* Metric grid */
-.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:14px}
-.metric{padding:12px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);cursor:help}
-.metric-label{font-size:11px;color:#888;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
-.metric-label .info{display:inline-block;width:12px;height:12px;line-height:12px;text-align:center;font-size:9px;font-weight:700;color:#555;border:1px solid #333;border-radius:50%;flex-shrink:0}
-.metric:hover .metric-label .info{color:#888;border-color:#555}
-.metric-val{font-size:16px;font-weight:600}
-.metric-sub{font-size:10px;color:#666;margin-top:2px}
-.val-danger{color:#e34948}
-.val-warn{color:#eda100}
+/* ── Metric grid ── */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:10px;margin-top:14px}
+.metric{padding:12px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid var(--line-soft);cursor:help;min-width:0}
+.metric-label{font-size:11px;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
+.metric-label .info{display:inline-block;width:12px;height:12px;line-height:12px;text-align:center;font-size:9px;font-weight:700;color:var(--faint);border:1px solid #333;border-radius:50%;flex-shrink:0}
+.metric:hover .metric-label .info{color:var(--muted);border-color:var(--faint)}
+.metric-val{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.metric-sub{font-size:10px;color:var(--dim);margin-top:2px}
+.val-danger{color:var(--danger)}
+.val-warn{color:var(--warn)}
 
-/* Campaign breakdown */
-.campaigns-toggle{font-size:12px;color:#666;cursor:pointer;user-select:none;margin-top:12px;padding:0;background:none;border:none;text-decoration:underline;text-underline-offset:2px}
-.campaigns-toggle:hover{color:#888}
+/* ── Campaign breakdown ── */
+.campaigns-toggle{font-size:12px;color:var(--dim);cursor:pointer;user-select:none;margin-top:12px;padding:4px 0;background:none;border:none;text-decoration:underline;text-underline-offset:2px;font-family:inherit;align-self:flex-start}
+.campaigns-toggle:hover{color:var(--muted)}
 .campaigns-list{margin-top:8px;font-size:12px}
-.camp-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:8px}
+.camp-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);gap:8px}
 .camp-row:last-child{border-bottom:none}
-.camp-header{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;padding:6px 0 4px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.camp-header{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;padding:6px 0 4px;border-bottom:1px solid rgba(255,255,255,0.08)}
 .camp-name{color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .camp-stats{display:flex;gap:12px;flex-shrink:0}
-.camp-stats span{min-width:52px;text-align:right}
+.camp-stat{min-width:52px;text-align:right}
+/* Column captions live in the header row on wide screens... */
+.camp-stat .cap{display:none}
 
-/* Budget edit */
-.budget-edit{display:flex;align-items:center;gap:4px}
-.budget-edit input{width:90px;padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:#1a1a1a;color:#e8e8e8;text-align:right;font-family:inherit}
+/* ...and move inside each cell once the row has to stack */
+@media(max-width:760px){
+  .camp-header{display:none}
+  .camp-row{flex-direction:column;align-items:stretch;gap:8px;padding:10px 0}
+  .camp-name{white-space:normal;overflow:visible;text-overflow:clip;color:#c9c9c9;font-weight:600;flex:none}
+  .camp-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;flex-shrink:1}
+  .camp-stat{min-width:0;text-align:left;display:flex;flex-direction:column;gap:1px}
+  .camp-stat .cap{display:block;font-size:9px;text-transform:uppercase;letter-spacing:0.4px;color:var(--faint);font-style:normal;font-weight:600}
+}
 
-/* Footer */
-.footer{margin-top:24px;padding:14px 18px;border-radius:10px;background:#141414;border:1px solid rgba(255,255,255,0.06);font-size:12px;color:#555;line-height:1.6}
-.footer strong{color:#888;font-weight:600}
+/* ── Budget edit ── */
+.budget-edit{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.budget-edit input{width:clamp(84px,22vw,110px);padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:#1a1a1a;color:var(--text);text-align:right;font-family:inherit}
+.budget-edit input:focus{outline:none;border-color:var(--info)}
 
-/* Loading */
-.loading-overlay{position:fixed;inset:0;background:rgba(10,10,10,0.9);display:flex;align-items:center;justify-content:center;z-index:100}
-.spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.1);border-top-color:#e8e8e8;border-radius:50%;animation:spin 0.8s linear infinite}
+/* ── Footer ── */
+.footer{margin-top:24px;padding:14px 18px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft);font-size:12px;color:var(--faint);line-height:1.6}
+.footer strong{color:var(--muted);font-weight:600}
+
+/* ── Loading ── */
+.loading-overlay{position:fixed;inset:0;background:rgba(10,10,10,0.9);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px;text-align:center}
+.spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--text);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Sign out */
-.btn-signout{font-size:11px;padding:3px 10px;border-radius:6px;color:#888}
-.btn-signout:hover{color:#e8e8e8}
+/* ── Sign out ── */
+.btn-signout{font-size:11px;padding:3px 10px;border-radius:6px;color:var(--muted)}
+.btn-signout:hover{color:var(--text)}
 
-/* Responsive */
+/* ══ Breakpoint ladder ══ */
+
+/* Phones — stack the header, give controls real touch targets */
 @media(max-width:600px){
-  .wrap{padding:20px 14px}
-  .summary{grid-template-columns:repeat(2,1fr)}
-  .metrics{grid-template-columns:repeat(2,1fr)}
-  .camp-stats{gap:8px}
-  .camp-stats span{min-width:50px;font-size:11px}
+  .header{margin-bottom:18px;gap:14px}
+  .header-actions{flex-direction:row;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px}
+  .header-buttons{justify-content:flex-start}
+  .header-buttons .btn{padding:8px 14px;font-size:12px}
+  .summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat{padding:12px 14px}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .geo-head{align-items:flex-start}
+  .geo-actions{width:100%;justify-content:space-between}
+  .campaigns-toggle{padding:8px 0}
+  .footer{margin-top:20px}
 }
 
-/* Desktop: 2-column geo grid so all 4 counties fit on screen */
-@media(min-width:1100px){
-  .wrap{padding:32px 32px}
-  .header h1{font-size:26px}
-  .summary{grid-template-columns:repeat(4,1fr)}
-  .stat-val{font-size:24px}
-  .geo-grid{grid-template-columns:repeat(2,1fr);gap:16px;align-items:start}
-  .metrics{grid-template-columns:repeat(4,1fr)}
+/* Very small phones — one column beats two cramped ones */
+@media(max-width:380px){
+  .summary{grid-template-columns:1fr}
+  .camp-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Tablets — three metrics read better than an auto-fit orphan row */
+@media(min-width:601px) and (max-width:900px){
+  .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Laptops — two geo cards side by side */
+@media(min-width:1024px){
+  .wrap{padding-top:32px}
+  .summary{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .geo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+@media(min-width:1280px){
+  .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
   .metric-val{font-size:17px}
-  .geo-name{font-size:17px}
 }
 
-/* Extra-wide monitors: keep 2×2 but breathe more */
+/* Extra-wide monitors — widen the shell before adding a third column */
 @media(min-width:1600px){
-  .wrap{max-width:1500px;padding:36px 40px}
-  .metrics{grid-template-columns:repeat(8,1fr)}
+  :root{--sidebar-w:260px}
+  .wrap{max-width:1500px;padding-top:36px}
+  .metrics{grid-template-columns:repeat(6,minmax(0,1fr))}
+}
+
+/* Ultra-wide — three geo cards across */
+@media(min-width:1900px){
+  .wrap{max-width:1900px}
+  .geo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}
 }
 </style>
 </head>
@@ -179,9 +327,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <div class="layout" id="dashboard" style="display:none">
 
-<aside class="sidebar">
+<!-- Narrow screens only: fixed bar carrying the drawer trigger -->
+<header class="topbar">
+  <button class="hamburger" id="navToggle" type="button"
+          aria-label="Open accounts menu" aria-expanded="false" aria-controls="sidebar">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="topbar-text">
+    <div class="topbar-title">Budget pacing</div>
+    <div class="topbar-ws" id="topbarWs"></div>
+  </div>
+</header>
+
+<div class="nav-scrim" id="navScrim" aria-hidden="true"></div>
+
+<aside class="sidebar" id="sidebar" aria-label="Accounts">
+  <div class="sidebar-head">
+    <span class="sidebar-heading">Accounts</span>
+    <button class="sidebar-close" id="navClose" type="button" aria-label="Close accounts menu">&times;</button>
+  </div>
   <div class="sidebar-title">Accounts</div>
   <div id="wsList"></div>
+  <div class="sidebar-foot">
+    <button class="btn btn-block" onclick="doSignOut()" title="End this session">Sign out</button>
+  </div>
 </aside>
 
 <div class="wrap">
@@ -191,7 +360,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="sub" id="monthLabel"></div>
     </div>
     <div class="header-actions">
-      <div style="display:flex;gap:8px;align-items:center">
+      <div class="header-buttons">
         <button class="btn btn-sm btn-signout" onclick="doSignOut()" title="End this session">Sign out</button>
         <button class="btn" id="refreshBtn" onclick="doRefresh()">Refresh live data</button>
       </div>
@@ -265,9 +434,15 @@ function renderSidebar() {
       <div class="ws-bar"><span class="${cls}" style="width:${Math.min(100, pct)}%"></span></div>
     </button>`;
   }).join('');
+
+  // The drawer hides the account list on phones, so name the active one in the bar.
+  const label = document.getElementById('topbarWs');
+  const active = workspaces.find((w) => w.id === currentWorkspace);
+  if (label && active) label.textContent = active.name;
 }
 
 async function switchWorkspace(id) {
+  closeNav();
   if (!id || id === currentWorkspace) return;
   currentWorkspace = id;
   localStorage.setItem('ws', id);
@@ -280,6 +455,71 @@ document.addEventListener('click', (e) => {
   const row = e.target.closest && e.target.closest('.ws-row');
   if (row) switchWorkspace(row.dataset.ws);
 });
+
+// ── Mobile drawer ──
+// Below 900px the sidebar is off-canvas; above it, it is always in view and
+// the toggle is hidden, so every helper here is a no-op on desktop.
+const navToggle = document.getElementById('navToggle');
+const navClose = document.getElementById('navClose');
+const navScrim = document.getElementById('navScrim');
+const sidebarEl = document.getElementById('sidebar');
+const wideScreen = window.matchMedia('(min-width:901px)');
+
+function navIsOpen() {
+  return document.body.classList.contains('nav-open');
+}
+
+function openNav() {
+  if (wideScreen.matches || navIsOpen()) return;
+  document.body.classList.add('nav-open');
+  document.body.style.overflow = 'hidden';
+  navToggle.setAttribute('aria-expanded', 'true');
+  // Land focus inside the drawer so the keyboard trap below has something to hold.
+  const first = sidebarEl.querySelector('.ws-row.active') || sidebarEl.querySelector('.ws-row') || navClose;
+  if (first) first.focus();
+}
+
+function closeNav() {
+  if (!navIsOpen()) return;
+  document.body.classList.remove('nav-open');
+  document.body.style.overflow = '';
+  navToggle.setAttribute('aria-expanded', 'false');
+  navToggle.focus();
+}
+
+navToggle.addEventListener('click', () => (navIsOpen() ? closeNav() : openNav()));
+navClose.addEventListener('click', closeNav);
+navScrim.addEventListener('click', closeNav);
+
+document.addEventListener('keydown', (e) => {
+  if (!navIsOpen()) return;
+  if (e.key === 'Escape') { closeNav(); return; }
+  if (e.key !== 'Tab') return;
+
+  // Keep Tab inside the drawer while it covers the page.
+  const focusable = sidebarEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
+
+// Rotating to landscape can cross the breakpoint with the drawer still open,
+// which would otherwise leave the body scroll-locked behind a visible sidebar.
+const onWide = (e) => {
+  if (!e.matches) return;
+  document.body.classList.remove('nav-open');
+  document.body.style.overflow = '';
+  navToggle.setAttribute('aria-expanded', 'false');
+};
+if (wideScreen.addEventListener) wideScreen.addEventListener('change', onWide);
+else wideScreen.addListener(onWide);
 
 async function fetchDashboard() {
   const qs = currentWorkspace ? `?workspace=${encodeURIComponent(currentWorkspace)}` : '';
@@ -461,12 +701,12 @@ function renderGeoCard(g) {
       `<div class="camp-row camp-header">
         <span class="camp-name">Campaign name</span>
         <div class="camp-stats">
-          <span>Spent</span>
-          <span>Leads</span>
-          <span>Cost/lead</span>
-          <span>CTR</span>
-          <span>Click→lead</span>
-          <span>Freq.</span>
+          <span class="camp-stat">Spent</span>
+          <span class="camp-stat">Leads</span>
+          <span class="camp-stat">Cost/lead</span>
+          <span class="camp-stat">CTR</span>
+          <span class="camp-stat">Click&rarr;lead</span>
+          <span class="camp-stat">Freq.</span>
         </div>
       </div>` +
       g.campaigns.map(c => {
@@ -478,14 +718,14 @@ function renderGeoCard(g) {
         const ctrColor = ctr > 0 && ctr < 1 ? '#e34948' : ctr > 0 && ctr < 2 ? '#eda100' : '#888';
         return `
         <div class="camp-row">
-          <span class="camp-name" title="${c.name}">${c.name}</span>
+          <span class="camp-name" title="${esc(c.name)}">${esc(c.name)}</span>
           <div class="camp-stats">
-            <span style="color:#e8e8e8">${fmt(c.spend)}</span>
-            <span style="color:#888">${c.leads}</span>
-            <span style="color:#666">${c.leads > 0 ? fmtDec(c.spend / c.leads) : '—'}</span>
-            <span style="color:${ctrColor}">${ctr > 0 ? ctr.toFixed(2) + '%' : '—'}</span>
-            <span style="color:${c2lColor}">${c2l > 0 ? c2l.toFixed(1) + '%' : '—'}</span>
-            <span style="color:${freqColor}">${freq > 0 ? freq.toFixed(2) + 'x' : '—'}</span>
+            <span class="camp-stat"><i class="cap">Spent</i><span class="val" style="color:#e8e8e8">${fmt(c.spend)}</span></span>
+            <span class="camp-stat"><i class="cap">Leads</i><span class="val" style="color:#888">${c.leads}</span></span>
+            <span class="camp-stat"><i class="cap">Cost/lead</i><span class="val" style="color:#666">${c.leads > 0 ? fmtDec(c.spend / c.leads) : '—'}</span></span>
+            <span class="camp-stat"><i class="cap">CTR</i><span class="val" style="color:${ctrColor}">${ctr > 0 ? ctr.toFixed(2) + '%' : '—'}</span></span>
+            <span class="camp-stat"><i class="cap">Click&rarr;lead</i><span class="val" style="color:${c2lColor}">${c2l > 0 ? c2l.toFixed(1) + '%' : '—'}</span></span>
+            <span class="camp-stat"><i class="cap">Freq.</i><span class="val" style="color:${freqColor}">${freq > 0 ? freq.toFixed(2) + 'x' : '—'}</span></span>
           </div>
         </div>`;
       }).join('') + '</div>';

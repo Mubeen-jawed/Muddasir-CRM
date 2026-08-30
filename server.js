@@ -11,7 +11,7 @@ const {
   getAllAccountIds,
   getWorkspace,
   getGeos,
-  getSlackGeos,
+  getSlackWorkspaces,
 } = require("./config");
 const auth = require("./auth");
 
@@ -19,7 +19,10 @@ const app = express();
 const PORT = process.env.PORT || 3500;
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_API_VERSION = process.env.META_API_VERSION || "v26.0";
-const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
+// System-level alerts (Meta token expiry) go here, never to a client channel —
+// clients shouldn't see our infrastructure warnings.
+const SLACK_OPS_CHANNEL = process.env.SLACK_OPS_CHANNEL;
 const WARN_THRESHOLD = parseInt(process.env.ALERT_WARN_THRESHOLD || "80") / 100;
 const DANGER_THRESHOLD = parseInt(process.env.ALERT_DANGER_THRESHOLD || "95") / 100;
 const REFRESH_MINUTES = parseInt(process.env.REFRESH_INTERVAL_MINUTES || "60");
@@ -219,11 +222,43 @@ async function checkTokenExpiry() {
   }
 }
 
+// ── Slack transport ──
+// One bot token posts to every channel; the channel is chosen per call. Unlike
+// an incoming webhook, chat.postMessage reports WHY a post failed
+// (channel_not_found, not_in_channel, invalid_auth) instead of failing quietly.
+async function postToSlack(channel, payload, label = "SLACK") {
+  if (!SLACK_BOT_TOKEN) return null;
+  if (!channel) return null;
+  try {
+    const r = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({ channel, ...payload }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!body || !body.ok) {
+      const why = (body && body.error) || `HTTP ${r.status}`;
+      console.error(`  [${label}] post to ${channel} FAILED: ${why}`);
+      if (why === "not_in_channel" || why === "channel_not_found") {
+        console.error(`  [${label}] if ${channel} is private, run /invite @blendfold_bot in it`);
+      }
+      return body;
+    }
+    return body;
+  } catch (err) {
+    console.error(`  [${label}] post to ${channel} failed: ${err.message}`);
+    return null;
+  }
+}
+
 // ── Slack warning for a dying token ──
 // Without this, an expired token looks identical to a quiet week: the numbers
 // simply stop moving, and nobody notices until a budget has already blown past.
 async function postTokenWarning() {
-  if (!SLACK_WEBHOOK || !tokenExpiry) return;
+  if (!SLACK_OPS_CHANNEL || !tokenExpiry) return;
 
   // One warning per day, so a restart loop can't spam the channel.
   const today = getToday();
@@ -246,16 +281,14 @@ async function postTokenWarning() {
     "_A System User token from Business Settings never expires and retires this warning for good._",
   ];
 
-  try {
-    await fetch(SLACK_WEBHOOK, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: lines.join("\n") }),
-    });
+  const res = await postToSlack(
+    SLACK_OPS_CHANNEL,
+    { text: lines.join("\n") },
+    "TOKEN"
+  );
+  if (res && res.ok) {
     lastTokenWarnDate = today;
     console.log("  [TOKEN] Slack expiry warning sent");
-  } catch (err) {
-    console.error(`  [TOKEN] Slack warning failed: ${err.message}`);
   }
 }
 
@@ -275,15 +308,18 @@ function categorizeCampaigns(apiResults) {
       const name = camp.campaign_name || camp.name || "";
       const spend = parseFloat(camp.spend || 0);
 
-      // Extract lead count from actions
+      // Extract lead count from actions.
+      // Meta returns several overlapping lead action types on the same campaign
+      // (`lead`, `offsite_conversion.fb_pixel_lead`, `onsite_web_lead`, ...).
+      // `lead` is Meta's aggregate across every lead source, so prefer it
+      // explicitly — matching on whichever happened to come first in the array
+      // made the count depend on Meta's undocumented field ordering.
       let leads = 0;
-      if (camp.actions) {
-        const leadAction = camp.actions.find(
-          (a) =>
-            a.action_type === "offsite_conversion.fb_pixel_lead" ||
-            a.action_type === "lead"
-        );
-        if (leadAction) leads = parseInt(leadAction.value || 0);
+      if (Array.isArray(camp.actions)) {
+        const byType = (t) => camp.actions.find((a) => a.action_type === t);
+        const leadAction =
+          byType("lead") || byType("offsite_conversion.fb_pixel_lead");
+        if (leadAction) leads = parseInt(leadAction.value || 0, 10);
       }
       // Fallback: calculate from cost_per_action_type
       if (leads === 0 && camp.cost_per_action_type) {
@@ -297,7 +333,11 @@ function categorizeCampaigns(apiResults) {
         }
       }
 
-      // Match campaign to geo based on config rules
+      // Match campaign to geo based on config rules.
+      // Tracked so a campaign that lands in zero geos (spend silently dropped
+      // from every total, including Slack's) or in two geos (spend counted
+      // twice) is visible in the logs instead of quietly skewing the numbers.
+      const matchedGeos = [];
       GEOS.forEach((geo) => {
         geo.accounts.forEach((accConfig) => {
           if (accConfig.accountId !== accountId) return;
@@ -319,6 +359,7 @@ function categorizeCampaigns(apiResults) {
           }
 
           // This campaign belongs to this geo
+          matchedGeos.push(geo.id);
           const impressions = parseInt(camp.impressions || 0, 10);
           const clicks = parseInt(camp.clicks || 0, 10);
           const reach = parseInt(camp.reach || 0, 10);
@@ -343,6 +384,16 @@ function categorizeCampaigns(apiResults) {
           });
         });
       });
+
+      if (spend > 0 && matchedGeos.length !== 1) {
+        const why =
+          matchedGeos.length === 0
+            ? "matched NO geo — its spend is missing from every total"
+            : `matched ${matchedGeos.length} geos (${matchedGeos.join(", ")}) — its spend is counted ${matchedGeos.length}x`;
+        console.warn(
+          `  [CATEGORIZE] "${name}" (${accountId}, $${spend.toFixed(2)}) ${why} — check includeKeywords/excludeKeywords in config.js`
+        );
+      }
     });
   });
 
@@ -427,12 +478,19 @@ async function refreshData() {
 }
 
 // ── Slack alerts ──
+// One message per client, in that client's own channel. Geos are grouped by
+// workspace, so a client never sees another client's spend or totals.
 async function checkAlerts() {
-  if (!SLACK_WEBHOOK || !cachedData) return;
+  if (!SLACK_BOT_TOKEN || !cachedData) return;
+  for (const ws of getSlackWorkspaces()) {
+    await postWorkspaceAlert(ws);
+  }
+}
 
+async function postWorkspaceAlert(ws) {
   const alerts = [];
 
-  getSlackGeos().forEach((g) => {
+  getGeos(ws.id).forEach((g) => {
     const d = cachedData[g.id];
     const budget = getEffectiveBudget(g.id);
     const pct = d.spent / budget;
@@ -454,59 +512,65 @@ async function checkAlerts() {
   });
 
   if (alerts.length > 0) {
-    const totalSpent = Object.values(cachedData).reduce((a, d) => a + d.spent, 0);
-    const totalBudget = getSlackGeos().reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+    // Both sides of this total must cover the same geos as the alert lines above,
+    // and only this workspace's geos - another client's spend must never be
+    // folded into a total shown against this client's budget.
+    const wsGeos = getGeos(ws.id);
+    const totalSpent = wsGeos.reduce((a, g) => a + cachedData[g.id].spent, 0);
+    const totalBudget = wsGeos.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
 
     const message = {
-      text: `:bar_chart: *Ben ADU Budget Alert*\n\n${alerts.join("\n")}\n\n_Total: $${Math.round(totalSpent).toLocaleString()} / $${totalBudget.toLocaleString()} | ${new Date().toLocaleString()}_`,
+      text: `:bar_chart: *${ws.name} Budget Alert*\n\n${alerts.join("\n")}\n\n_Total: $${Math.round(totalSpent).toLocaleString()} / $${totalBudget.toLocaleString()} | ${new Date().toLocaleString()}_`,
     };
 
-    try {
-      await fetch(SLACK_WEBHOOK, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(message),
-      });
-      console.log("  Slack alert sent");
-    } catch (err) {
-      console.error(`  Slack alert failed: ${err.message}`);
-    }
+    const res = await postToSlack(ws.slackChannel, message, "ALERT");
+    if (res && res.ok) console.log(`  Slack alert sent — ${ws.name} → ${ws.slackChannel}`);
   }
 }
 
 // ── Daily end-of-day lead summary to Slack ──
 async function postDailyLeadSummary() {
-  if (!SLACK_WEBHOOK) return;
+  if (!SLACK_BOT_TOKEN) return;
 
   const today = getToday();
   const accountIds = getAllAccountIds();
 
   try {
+    // Fetch once, then slice per client - every workspace reads the same
+    // categorized payload, so N clients still cost one Meta round-trip.
     const raw = await fetchInsights(accountIds, today, today);
     const geoData = categorizeCampaigns(raw);
 
-    const lines = getSlackGeos().map((g) => {
+    for (const ws of getSlackWorkspaces()) {
+      await postWorkspaceDailySummary(ws, geoData, today);
+    }
+  } catch (err) {
+    console.error(`[DAILY SUMMARY] failed: ${err.message}`);
+  }
+}
+
+async function postWorkspaceDailySummary(ws, geoData, today) {
+  const wsGeos = getGeos(ws.id);
+  {
+    const lines = wsGeos.map((g) => {
       const d = geoData[g.id];
       const cpl = d.leads > 0 ? (d.spent / d.leads).toFixed(2) : "—";
       return `• *${g.name}*: *${d.leads} leads*  |  $${d.spent.toFixed(2)} spent  |  CPL $${cpl}`;
     });
 
-    const totalLeads = Object.values(geoData).reduce((a, d) => a + d.leads, 0);
-    const totalSpent = Object.values(geoData).reduce((a, d) => a + d.spent, 0);
+    // Same scope as `lines` above — otherwise another client inflates the total.
+    const totalLeads = wsGeos.reduce((a, g) => a + geoData[g.id].leads, 0);
+    const totalSpent = wsGeos.reduce((a, g) => a + geoData[g.id].spent, 0);
     const totalCpl = totalLeads > 0 ? (totalSpent / totalLeads).toFixed(2) : "—";
 
     const message = {
-      text: `:calendar: *Ben ADU — Daily Lead Summary* (${today})\n\n${lines.join("\n")}\n\n_Total: *${totalLeads} leads* / $${totalSpent.toFixed(2)} spent / avg CPL $${totalCpl}_`,
+      text: `:calendar: *${ws.name} — Daily Lead Summary* (${today})\n\n${lines.join("\n")}\n\n_Total: *${totalLeads} leads* / $${totalSpent.toFixed(2)} spent / avg CPL $${totalCpl}_`,
     };
 
-    const r = await fetch(SLACK_WEBHOOK, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message),
-    });
-    console.log(`[DAILY SUMMARY] posted (${totalLeads} leads / $${totalSpent.toFixed(2)}) — Slack ${r.status}`);
-  } catch (err) {
-    console.error(`[DAILY SUMMARY] failed: ${err.message}`);
+    const res = await postToSlack(ws.slackChannel, message, "DAILY SUMMARY");
+    if (res && res.ok) {
+      console.log(`[DAILY SUMMARY] ${ws.name} → ${ws.slackChannel} (${totalLeads} leads / $${totalSpent.toFixed(2)})`);
+    }
   }
 }
 
@@ -514,7 +578,7 @@ async function postDailyLeadSummary() {
 // Compares MTD spend vs expected linear pace (day/days_in_month * budget).
 // Flags geos more than PACE_THRESHOLD off, projects EOM spend.
 async function postWeeklyPacingCheck() {
-  if (!SLACK_WEBHOOK) return;
+  if (!SLACK_BOT_TOKEN) return;
 
   // Make sure we compare against fresh numbers
   await refreshData();
@@ -523,12 +587,18 @@ async function postWeeklyPacingCheck() {
     return;
   }
 
+  for (const ws of getSlackWorkspaces()) {
+    await postWorkspacePacingCheck(ws);
+  }
+}
+
+async function postWorkspacePacingCheck(ws) {
   const PACE_THRESHOLD = 0.10; // ±10% is "on pace"
   const daysInMonth = getDaysInMonth();
   const dayOfMonth = getDayOfMonth();
   const monthProgress = dayOfMonth / daysInMonth;
 
-  const items = getSlackGeos().map((g) => {
+  const items = getGeos(ws.id).map((g) => {
     const d = cachedData[g.id];
     const budget = getEffectiveBudget(g.id);
     const spent = d.spent;
@@ -570,23 +640,18 @@ async function postWeeklyPacingCheck() {
   });
 
   const header = anyOff
-    ? ":warning: *Ben ADU — Weekly Pacing Check*"
-    : ":bar_chart: *Ben ADU — Weekly Pacing Check*";
+    ? `:warning: *${ws.name} — Weekly Pacing Check*`
+    : `:bar_chart: *${ws.name} — Weekly Pacing Check*`;
   const subheader = `Day ${dayOfMonth}/${daysInMonth} (${Math.round(monthProgress * 100)}% through month)`;
 
   const message = {
     text: `${header}\n_${subheader}_\n\n${lines.join("\n\n")}`,
   };
 
-  try {
-    const r = await fetch(SLACK_WEBHOOK, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message),
-    });
-    console.log(`[WEEKLY PACING] posted (${items.filter((i) => i.status !== "on pace").length} off-pace) — Slack ${r.status}`);
-  } catch (err) {
-    console.error(`[WEEKLY PACING] failed: ${err.message}`);
+  const res = await postToSlack(ws.slackChannel, message, "WEEKLY PACING");
+  if (res && res.ok) {
+    const off = items.filter((i) => i.status !== "on pace").length;
+    console.log(`[WEEKLY PACING] ${ws.name} → ${ws.slackChannel} (${off} off-pace)`);
   }
 }
 
@@ -604,7 +669,7 @@ function shiftDate(ymd, days) {
 }
 
 async function postWeeklyResultsSummary() {
-  if (!SLACK_WEBHOOK) return;
+  if (!SLACK_BOT_TOKEN) return;
 
   // Trailing 7-day window ending YESTERDAY vs the 7 days before that
   const yesterday = shiftDate(getToday(), -1);
@@ -625,8 +690,24 @@ async function postWeeklyResultsSummary() {
 
     // Refresh MTD cachedData for pacing
     await refreshData();
+
+    // Both Meta windows are fetched once above and sliced per client below.
+    for (const ws of getSlackWorkspaces()) {
+      await postWorkspaceWeeklyResults(ws, {
+        thisGeo, priorGeo, thisStart, thisEnd, priorStart, priorEnd,
+      });
+    }
+  } catch (err) {
+    console.error(`[WEEKLY RESULTS] failed: ${err.message}`);
+  }
+}
+
+async function postWorkspaceWeeklyResults(ws, ctx) {
+  const { thisGeo, priorGeo, thisStart, thisEnd, priorStart, priorEnd } = ctx;
+  {
     const daysInMonth = getDaysInMonth();
     const dayOfMonth = getDayOfMonth();
+    const daysLeft = Math.max(0, daysInMonth - dayOfMonth);
 
     // ── Formatting helpers ──
     const $ = (n) => "$" + Math.round(n).toLocaleString();
@@ -651,7 +732,7 @@ async function postWeeklyResultsSummary() {
     let totalThisSpend = 0, totalThisLeads = 0, totalPriorSpend = 0, totalPriorLeads = 0;
     const geoBlocks = [];
 
-    for (const g of getSlackGeos()) {
+    for (const g of getGeos(ws.id)) {
       const t = thisGeo[g.id];
       const p = priorGeo[g.id];
       const tSpend = t.spent, tLeads = t.leads;
@@ -669,8 +750,12 @@ async function postWeeklyResultsSummary() {
       const budget = getEffectiveBudget(g.id);
       const mtdSpent = cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0;
       const mtdPct = budget > 0 ? (mtdSpent / budget) * 100 : 0;
+      // Project forward from what is ALREADY spent, at last week's daily rate.
+      // Multiplying the weekly rate by the full month instead re-forecasts days
+      // that have already happened — on day 29 of 31 that produced month-end
+      // numbers the month could no longer arithmetically reach.
       const lastWeekDaily = tSpend / 7;
-      const projectedEOM = lastWeekDaily * daysInMonth;
+      const projectedEOM = mtdSpent + lastWeekDaily * daysLeft;
 
       // Verdict per geo — client wants to LAND on budget, so 95-105% is the sweet spot.
       // Under-spending is a problem (leaving money on the table) just like over-spending.
@@ -721,10 +806,11 @@ async function postWeeklyResultsSummary() {
     const totalLeadDelta = pct(totalThisLeads, totalPriorLeads);
     const totalCplDelta = priorTotalCpl > 0 && totalCpl > 0 ? ((totalCpl - priorTotalCpl) / priorTotalCpl) * 100 : 0;
 
-    const totalBudget = getSlackGeos().reduce((a, g) => a + getEffectiveBudget(g.id), 0);
-    const totalMtd = getSlackGeos().reduce((a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0), 0);
+    const wsGeos = getGeos(ws.id);
+    const totalBudget = wsGeos.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+    const totalMtd = wsGeos.reduce((a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0), 0);
     const totalMtdPct = totalBudget > 0 ? (totalMtd / totalBudget) * 100 : 0;
-    const totalProjectedEOM = (totalThisSpend / 7) * daysInMonth;
+    const totalProjectedEOM = totalMtd + (totalThisSpend / 7) * daysLeft;
     const totalProjDelta = totalProjectedEOM - totalBudget;
 
     // ── Headline verdict (plain English) ──
@@ -766,7 +852,7 @@ async function postWeeklyResultsSummary() {
 
     // ── Build Slack blocks ──
     const blocks = [
-      { type: "header", text: { type: "plain_text", text: `📊 Weekly Results — ${dateLabel(thisStart)} – ${dateLabel(thisEnd)}` } },
+      { type: "header", text: { type: "plain_text", text: `📊 ${ws.name} — Weekly Results — ${dateLabel(thisStart)} – ${dateLabel(thisEnd)}` } },
       { type: "context", elements: [{ type: "mrkdwn", text: `_Compared to ${dateLabel(priorStart)} – ${dateLabel(priorEnd)}_` }] },
       { type: "divider" },
       { type: "section", text: { type: "mrkdwn", text: `${headlineIcon} *${headline}*` } },
@@ -774,20 +860,16 @@ async function postWeeklyResultsSummary() {
       { type: "divider" },
       ...geoBlocks,
       { type: "divider" },
-      { type: "context", elements: [{ type: "mrkdwn", text: `:bar_chart: Live dashboard: <https://ben.blendfoldmedia.com|ben.blendfoldmedia.com> · Next update: Monday 10 PM EST` }] },
+      { type: "context", elements: [{ type: "mrkdwn", text: `:bar_chart: Live dashboard: <${ws.dashboardUrl}|${ws.dashboardUrl.split("//").pop()}> · Next update: Monday 10 PM EST` }] },
     ];
 
     // Plain-text fallback for notifications and clients that don't render blocks
-    const fallback = `Ben ADU Weekly Results ${dateLabel(thisStart)}-${dateLabel(thisEnd)}: ${totalThisLeads} leads @ ${$$(totalCpl)} · ${$(totalThisSpend)} spent · MTD ${totalMtdPct.toFixed(0)}% of budget`;
+    const fallback = `${ws.name} Weekly Results ${dateLabel(thisStart)}-${dateLabel(thisEnd)}: ${totalThisLeads} leads @ ${$$(totalCpl)} · ${$(totalThisSpend)} spent · MTD ${totalMtdPct.toFixed(0)}% of budget`;
 
-    const r = await fetch(SLACK_WEBHOOK, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: fallback, blocks }),
-    });
-    console.log(`[WEEKLY RESULTS] posted (${totalThisLeads} leads / $${totalThisSpend.toFixed(2)} vs ${totalPriorLeads} / $${totalPriorSpend.toFixed(2)}) — Slack ${r.status}`);
-  } catch (err) {
-    console.error(`[WEEKLY RESULTS] failed: ${err.message}`);
+    const res = await postToSlack(ws.slackChannel, { text: fallback, blocks }, "WEEKLY RESULTS");
+    if (res && res.ok) {
+      console.log(`[WEEKLY RESULTS] ${ws.name} → ${ws.slackChannel} (${totalThisLeads} leads / $${totalThisSpend.toFixed(2)} vs ${totalPriorLeads} / $${totalPriorSpend.toFixed(2)})`);
+    }
   }
 }
 
@@ -901,7 +983,8 @@ app.get("/api/dashboard", (req, res) => {
     // "Your daily avg" now reflects the last 7 days' pace (matches Slack's forward-looking view).
     // Falls back to MTD average early in the month if week data unavailable yet.
     const weekDaily = weekData ? weekData.spent / 7 : actualDaily;
-    const projectedEOM = weekDaily * daysInMonth;
+    // MTD actual + remaining days at last week's rate (see postWeeklyResultsSummary).
+    const projectedEOM = data.spent + weekDaily * daysLeft;
     const recDaily = daysLeft > 0 ? remaining / daysLeft : 0;
     const cpl = data.leads > 0 ? data.spent / data.leads : 0;
 
@@ -1111,7 +1194,17 @@ app.listen(PORT, async () => {
   console.log(`  Ben ADU Budget Dashboard`);
   console.log(`  http://localhost:${PORT}`);
   console.log(`  Auto-refresh: every ${REFRESH_MINUTES} minutes`);
-  console.log(`  Slack alerts: ${SLACK_WEBHOOK ? "enabled" : "disabled"}`);
+  if (SLACK_BOT_TOKEN) {
+    const routed = getSlackWorkspaces();
+    console.log(`  Slack: bot token set — ${routed.length} of ${WORKSPACES.length} workspace(s) routed`);
+    WORKSPACES.forEach((w) => {
+      const dest = w.slackChannel ? w.slackChannel : "no channel — silent";
+      console.log(`    ${w.name}: ${dest}`);
+    });
+    console.log(`    [ops alerts]: ${SLACK_OPS_CHANNEL || "no channel — token warnings disabled"}`);
+  } else {
+    console.log("  Slack: disabled (no SLACK_BOT_TOKEN)");
+  }
   if (auth.AUTH_ENABLED) {
     console.log(`  Login: required (user "${auth.AUTH_USERNAME}", ${auth.SESSION_HOURS}h sessions)`);
   } else {

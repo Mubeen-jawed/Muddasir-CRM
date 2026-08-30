@@ -197,8 +197,8 @@ Workspaces are defined at the top of `config.js`:
 
 ```javascript
 const WORKSPACES = [
-  { id: "ben-adu",   name: "Ben ADU",   slackAlerts: true  },
-  { id: "perstrive", name: "Perstrive", slackAlerts: false },
+  { id: "ben-adu",   name: "Ben ADU",   slackChannel: "C0123ABCD", dashboardUrl: "..." },
+  { id: "perstrive", name: "Perstrive", slackChannel: null,        dashboardUrl: "..." },
 ];
 ```
 
@@ -207,13 +207,25 @@ stays a single flat list, because campaign categorization and the budget
 overrides both key off `geo.id` — so **geo ids must be unique across
 workspaces**.
 
-`slackAlerts` controls whether a workspace appears in the Slack budget alerts
-and the daily/weekly summaries. It defaults to off for new workspaces, so
-adding a client cannot start posting into someone else's channel.
+`slackChannel` is the client's own Slack channel. Each workspace gets its own
+budget alert and daily/weekly summary, posted there and covering only that
+workspace's geos — one client never sees another's spend or totals. Having a
+channel *is* the opt-in: `slackChannel: null` means the workspace is never
+posted about, so adding a client cannot start posting into someone else's
+channel.
+
+Use the encoded channel ID (`C0123ABCD`), not `#name` — a rename silently
+breaks name-based routing. The bot holds `chat:write.public`, so public
+channels need no invite; a **private** channel needs `/invite @blendfold_bot`
+run in it once.
+
+Meta token-expiry warnings are infrastructure, not client news, so they go to
+`SLACK_OPS_CHANNEL` instead of any client channel.
 
 ### Adding a workspace
 
-1. Add an entry to `WORKSPACES`.
+1. Add an entry to `WORKSPACES` (leave `slackChannel: null` until the client
+   channel exists).
 2. Add one or more geos with `workspace: "<that id>"`, each listing its
    `accountId`s.
 3. Restart. The sidebar row appears automatically, and the account is included

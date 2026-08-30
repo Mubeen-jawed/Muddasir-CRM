@@ -18,14 +18,21 @@ const WORKSPACES = [
   {
     id: "ben-adu",
     name: "Ben ADU",
-    // Slack alerts and the daily/weekly summaries only cover workspaces
-    // with this on, so adding a client can't start spamming Ben's channel.
-    slackAlerts: true,
+    // Slack destination for this client's alerts and daily/weekly summaries.
+    // Having a channel IS the opt-in: a workspace with slackChannel: null is
+    // never posted about, so adding a client can't start spamming someone
+    // else's channel. Use the encoded channel ID (Cxxxxxxxx), not "#name" —
+    // a rename silently breaks name-based routing.
+    // Public channels need no invite (the bot holds chat:write.public);
+    // a PRIVATE channel must have /invite @blendfold_bot run in it once.
+    slackChannel: "C0BTHN6RC2J", // TEST channel - swap for the real Ben ADU channel
+    dashboardUrl: "https://ben.blendfoldmedia.com",
   },
   {
     id: "perstrive",
     name: "Perstrive",
-    slackAlerts: false,
+    slackChannel: "C0BUE1U7KCY", // TEST channel - swap for the real Perstrive channel, or null to stay silent
+    dashboardUrl: "https://ben.blendfoldmedia.com",
   },
 ];
 
@@ -137,10 +144,11 @@ function getGeos(workspaceId) {
   return GEOS.filter((g) => g.workspace === workspaceId);
 }
 
-// Geos belonging to workspaces that opted into Slack.
-function getSlackGeos() {
-  const on = new Set(WORKSPACES.filter((w) => w.slackAlerts).map((w) => w.id));
-  return GEOS.filter((g) => on.has(g.workspace));
+// Workspaces with a Slack destination configured. Each one gets its own
+// message in its own channel — routing is derived from geo.workspace, so a
+// new client needs only its channel ID here, never a change in server.js.
+function getSlackWorkspaces() {
+  return WORKSPACES.filter((w) => w.slackChannel);
 }
 
 const DEFAULT_WORKSPACE = WORKSPACES[0].id;
@@ -152,5 +160,5 @@ module.exports = {
   getAllAccountIds,
   getWorkspace,
   getGeos,
-  getSlackGeos,
+  getSlackWorkspaces,
 };
