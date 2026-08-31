@@ -25,7 +25,7 @@ const WORKSPACES = [
     // a rename silently breaks name-based routing.
     // Public channels need no invite (the bot holds chat:write.public);
     // a PRIVATE channel must have /invite @blendfold_bot run in it once.
-    slackChannel: "C0BTHN6RC2J", // TEST channel - swap for the real Ben ADU channel
+    slackChannel: "C0BN4JP2AFM", // TEST channel - swap for the real Ben ADU channel
     dashboardUrl: "https://ben.blendfoldmedia.com",
   },
   {
