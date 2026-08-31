@@ -19,3 +19,9 @@
 # live runtime state — budget overrides written by /api/budget.
 # tracked copies get clobbered by deploys; the server copy is authoritative.
 budgets.json
+
+# runtime account list added from the dashboard UI (server copy is authoritative)
+accounts.json
+
+# per-client dashboard logins written by the server (hashes; server copy is authoritative)
+users.json

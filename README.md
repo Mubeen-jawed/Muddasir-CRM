@@ -149,6 +149,8 @@ These live only on the server and survive every deploy:
 
 - `.env` — secrets, gitignored
 - `budgets.json` — budget overrides made in the dashboard UI, gitignored
+- `accounts.json` — ad accounts added from the UI, and every workspace's Slack channel, gitignored
+- `users.json` — client logins (scrypt hashes, never plaintext), gitignored
 - `logs/` — PM2 output, gitignored
 - `node_modules/` — rebuilt from the lockfile on the server
 
@@ -207,12 +209,26 @@ stays a single flat list, because campaign categorization and the budget
 overrides both key off `geo.id` — so **geo ids must be unique across
 workspaces**.
 
-`slackChannel` is the client's own Slack channel. Each workspace gets its own
-budget alert and daily/weekly summary, posted there and covering only that
-workspace's geos — one client never sees another's spend or totals. Having a
-channel *is* the opt-in: `slackChannel: null` means the workspace is never
-posted about, so adding a client cannot start posting into someone else's
-channel.
+Each workspace gets its own budget alert and daily/weekly summary, posted to
+its own Slack channel and covering only that workspace's geos — one client
+never sees another's spend or totals.
+
+**Channel ids are not configured in code.** Every workspace's channel — seed
+and UI-added alike — lives in one map in `accounts.json`:
+
+```json
+{ "workspaces": [ ... ],
+  "channels": { "ben-adu": "C0BTHN6RC2J", "perstrive": "C0BUE1U7KCY" } }
+```
+
+Edit them from the dashboard: **Slack channels** in the sidebar lists every
+account with its channel. Blank means that account is tracked but never posts,
+so a client can be silenced without removing it.
+
+`seedSlackChannel` in `config.js` is used **once**, to populate that map the
+first time the server runs against an empty `accounts.json`. After that the
+stored map is the only source of truth and editing the code line does nothing.
+Delete `accounts.json` to re-seed from code.
 
 Use the encoded channel ID (`C0123ABCD`), not `#name` — a rename silently
 breaks name-based routing. The bot holds `chat:write.public`, so public
@@ -220,9 +236,36 @@ channels need no invite; a **private** channel needs `/invite @blendfold_bot`
 run in it once.
 
 Meta token-expiry warnings are infrastructure, not client news, so they go to
-`SLACK_OPS_CHANNEL` instead of any client channel.
+`SLACK_OPS_CHANNEL` in `.env` instead of any client channel.
 
-### Adding a workspace
+### Adding an ad account from the dashboard
+
+The sidebar's **+ Add ad account** button lists every ad account the Meta token
+can reach (`/me/adaccounts`), searchable by name, account ID, or business.
+Accounts already on the dashboard are shown greyed out so the same account
+can't be added twice — a second workspace on one account would double-count its
+spend in the portfolio totals.
+
+Picking one asks for a display name, a monthly budget, the **username and
+password** that account's client will sign in with, and an **optional** Slack
+channel ID. Leave the channel blank and the account is tracked on the dashboard
+but stays off Slack; add it later and messages start flowing.
+
+The login is created in the same request as the account, and is scoped to it
+alone — that client signs in to its own dashboard with no sidebar and no route
+to anyone else's numbers. See *Authentication* below.
+
+Accounts added this way are written to `accounts.json` (gitignored, like
+`budgets.json` — the server copy is authoritative and deploys never overwrite
+it). Each becomes one workspace owning one geo that covers **every** campaign in
+the account.
+
+Seed workspaces in `config.js` can't be edited or removed from the UI. They hold
+hand-tuned rules the picker can't express — Ben ADU slices a single account
+across three geos by campaign-name keywords — so they stay in code where those
+rules are reviewable.
+
+### Adding a workspace by hand
 
 1. Add an entry to `WORKSPACES` (leave `slackChannel: null` until the client
    channel exists).
@@ -387,6 +430,8 @@ These live only on the server and survive every deploy:
 
 - `.env` — secrets, gitignored
 - `budgets.json` — budget overrides made in the dashboard UI, gitignored
+- `accounts.json` — ad accounts added from the UI, and every workspace's Slack channel, gitignored
+- `users.json` — client logins (scrypt hashes, never plaintext), gitignored
 - `logs/` — PM2 output, gitignored
 - `node_modules/` — rebuilt from the lockfile on the server
 
@@ -433,20 +478,59 @@ Every run also prints a one-line rollback command naming the previous commit.
 The dashboard requires a sign-in. Nothing is served to an anonymous visitor
 except `/login` itself.
 
+### Two roles
+
+| Role | Who | Sees | Can change |
+|---|---|---|---|
+| **admin** | one login, set in `.env` (`AUTH_USERNAME` / `AUTH_PASSWORD_HASH`) | every account, in the sidebar | everything — add/remove accounts, budgets, Slack routing, logins |
+| **client** | one login per ad account, stored in `users.json` | only the account(s) its login is scoped to | nothing |
+
+A client signs in to a page with **no sidebar at all**: no account list, no
+*Add ad account*, no *Slack channels*, no *Edit budget*, and no way to reach
+another client's numbers. Hiding the chrome is only the visible half — the
+server refuses the routes regardless, so `?workspace=someone-else` serves the
+client its own account rather than the one it asked for, and every write route
+answers `403`.
+
+The current logins:
+
+| Username | Sees |
+|---|---|
+| `muddasir` | admin — every account |
+| `ben` | Ben ADU |
+| `perstrive` | Perstrive |
+
 ### How it works
 
 | | |
 |---|---|
-| Password storage | scrypt hash in `.env` (`AUTH_PASSWORD_HASH`) — the plaintext is never stored or committed |
-| Comparison | constant-time; username and password are always both checked, so response time can't be used to discover a valid username |
+| Password storage | scrypt hash — the admin's in `.env`, each client's in `users.json`. Plaintext is never stored or committed |
+| Comparison | constant-time; the admin check and the client check both always run to completion, and an unknown username is hashed against a throwaway hash, so response time can't be used to discover a valid username |
 | Session | stateless HMAC-signed cookie: `HttpOnly`, `SameSite=Strict`, `Secure` behind SSL, 12h expiry |
+| Revocation | the cookie carries only a username and a fingerprint of the password it was issued against. Role and scope are re-read on every request, so deleting a login, re-scoping it, or resetting its password ends its open sessions on the next request — not whenever the cookie expires |
 | Rate limiting | 5 failed attempts per IP → 15 minute lockout |
 | Coverage | the auth gate runs **before** `express.static`, so `index.html` is protected too — not just the API |
 
 Nothing sensitive is kept in the browser: the session lives in an `HttpOnly`
 cookie the page itself cannot read.
 
-### Changing the credentials
+### Managing client logins
+
+A login is created **together with its ad account** — *+ Add ad account* asks
+for a username and password alongside the budget and Slack channel, so an
+account never lands on the dashboard with no way for its owner to open it. The
+login is validated before the account is written, so a rejected username or
+password leaves nothing half-built behind.
+
+Afterwards, the sidebar's **Dashboard logins** dialog (admin only) lists every
+client login, and can reset a password or revoke one outright. Removing an ad
+account also removes the login that existed only for it.
+
+The admin login is deliberately **not** editable from the UI. It lives in
+`.env`, so no session can delete or re-scope the account that governs every
+other one.
+
+### Changing the admin credentials
 
 ```bash
 # 1. generate a new hash
@@ -495,10 +579,19 @@ REFRESH_INTERVAL_MINUTES=60  # Pull data every hour
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) |
+| GET | `/api/me` | Who is signed in: `{ username, role, workspaces }` |
+| GET | `/api/workspaces` | Sidebar rows — scoped to what the caller may see |
+| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) for one workspace |
 | POST | `/api/refresh` | Force data refresh from Meta Ads |
-| POST | `/api/budget` | Update budget `{ geoId, budget }` |
+| POST | `/api/budget` | Update budget `{ geoId, budget }` — **admin** |
+| POST/PATCH/DELETE | `/api/accounts` | Add, edit, remove an ad account — **admin** |
+| GET/POST/PATCH/DELETE | `/api/users` | List, add, reset, revoke client logins — **admin** |
+| GET/PUT | `/api/channels` | Slack routing per workspace — **admin** |
 | GET | `/api/health` | Health check (uptime, last fetch, errors, token expiry) |
+
+Routes marked **admin** answer `403` for a client login. `/api/workspaces` and
+`/api/dashboard` are not refused for a client — they are *scoped*: a client is
+served its own account whatever it asks for.
 
 ---
 
@@ -578,10 +671,19 @@ REFRESH_INTERVAL_MINUTES=60  # Pull data every hour
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) |
+| GET | `/api/me` | Who is signed in: `{ username, role, workspaces }` |
+| GET | `/api/workspaces` | Sidebar rows — scoped to what the caller may see |
+| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) for one workspace |
 | POST | `/api/refresh` | Force data refresh from Meta Ads |
-| POST | `/api/budget` | Update budget `{ geoId, budget }` |
+| POST | `/api/budget` | Update budget `{ geoId, budget }` — **admin** |
+| POST/PATCH/DELETE | `/api/accounts` | Add, edit, remove an ad account — **admin** |
+| GET/POST/PATCH/DELETE | `/api/users` | List, add, reset, revoke client logins — **admin** |
+| GET/PUT | `/api/channels` | Slack routing per workspace — **admin** |
 | GET | `/api/health` | Health check (uptime, last fetch, errors, token expiry) |
+
+Routes marked **admin** answer `403` for a client login. `/api/workspaces` and
+`/api/dashboard` are not refused for a client — they are *scoped*: a client is
+served its own account whatever it asks for.
 
 ---
 
@@ -680,10 +782,19 @@ REFRESH_INTERVAL_MINUTES=60  # Pull data every hour
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) |
+| GET | `/api/me` | Who is signed in: `{ username, role, workspaces }` |
+| GET | `/api/workspaces` | Sidebar rows — scoped to what the caller may see |
+| GET | `/api/dashboard` | Full dashboard data (geos, summary, meta) for one workspace |
 | POST | `/api/refresh` | Force data refresh from Meta Ads |
-| POST | `/api/budget` | Update budget `{ geoId, budget }` |
+| POST | `/api/budget` | Update budget `{ geoId, budget }` — **admin** |
+| POST/PATCH/DELETE | `/api/accounts` | Add, edit, remove an ad account — **admin** |
+| GET/POST/PATCH/DELETE | `/api/users` | List, add, reset, revoke client logins — **admin** |
+| GET/PUT | `/api/channels` | Slack routing per workspace — **admin** |
 | GET | `/api/health` | Health check (uptime, last fetch, errors, token expiry) |
+
+Routes marked **admin** answer `403` for a client login. `/api/workspaces` and
+`/api/dashboard` are not refused for a client — they are *scoped*: a client is
+served its own account whatever it asks for.
 
 ---
 

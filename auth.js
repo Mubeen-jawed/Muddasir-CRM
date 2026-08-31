@@ -1,16 +1,26 @@
 // =====================================================
 // AUTHENTICATION
 // =====================================================
-// Credentials live in .env, never in the repo:
+// The ADMIN's credentials live in .env, never in the repo:
 //   AUTH_USERNAME       plain username
 //   AUTH_PASSWORD_HASH  scrypt$N$r$p$saltB64$hashB64
 //   SESSION_SECRET      random, signs session cookies
 //
-// Sessions are stateless HMAC-signed cookies, so they survive a
-// pm2 restart. Rotating SESSION_SECRET invalidates every session.
+// Every other login is a CLIENT, stored in users.json (see users.js) and
+// scoped to the ad account(s) it may view. Two roles, and only two:
+//   admin  — sees every workspace, and is the only one who can change any
+//   client — sees exactly the workspaces listed on its record
+//
+// Sessions are stateless HMAC-signed cookies, so they survive a pm2 restart.
+// Rotating SESSION_SECRET invalidates every session. The cookie carries a
+// username and a fingerprint of the password it was issued against — nothing
+// else. Role and scope are re-read from the store on every request, so
+// deleting, re-scoping, or resetting the password on a login takes effect
+// immediately, without waiting for the session to expire.
 // =====================================================
 
 const crypto = require("crypto");
+const users = require("./users");
 
 const AUTH_USERNAME = process.env.AUTH_USERNAME || "";
 const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH || "";
@@ -29,34 +39,44 @@ function safeEqualStr(a, b) {
   return crypto.timingSafeEqual(ah, bh);
 }
 
-function verifyPassword(plain, stored) {
-  const parts = String(stored).split("$");
-  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+// Hash format and verification are shared with the client store, so an
+// admin hash from .env and a client hash from users.json are interchangeable.
+const verifyPassword = users.verifyPassword;
 
-  const [, N, r, p, saltB64, hashB64] = parts;
-  const salt = Buffer.from(saltB64, "base64");
-  const expected = Buffer.from(hashB64, "base64");
+const ADMIN = Object.freeze({ username: AUTH_USERNAME, role: "admin", workspaces: null });
 
-  let actual;
-  try {
-    actual = crypto.scryptSync(String(plain), salt, expected.length, {
-      N: Number(N),
-      r: Number(r),
-      p: Number(p),
-      maxmem: 64 * 1024 * 1024,
-    });
-  } catch {
-    return false;
-  }
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+// Resolves a username to the session identity behind it, or null. `workspaces`
+// is null for the admin — meaning "not scoped", i.e. every workspace — and an
+// array of workspace ids for a client.
+function resolveUser(username) {
+  const name = String(username || "");
+  if (!name) return null;
+  if (AUTH_USERNAME && safeEqualStr(name, AUTH_USERNAME)) return ADMIN;
+
+  const record = users.findUser(name);
+  if (!record) return null;
+  return { username: record.username, role: "client", workspaces: record.workspaces.slice() };
 }
 
-// Both checks always run — short-circuiting on the username would let an
-// attacker distinguish "no such user" from "wrong password" by response time.
+// Both the admin check and the client check always run to completion —
+// short-circuiting on the username would let an attacker distinguish
+// "no such user" from "wrong password" by response time. An unknown username
+// is hashed against a throwaway hash so it costs the same as a real one.
 function verifyCredentials(username, password) {
-  const userOk = safeEqualStr(username || "", AUTH_USERNAME);
-  const passOk = verifyPassword(password || "", AUTH_PASSWORD_HASH);
-  return userOk && passOk;
+  const name = String(username || "");
+  const pw = String(password || "");
+
+  const adminNameOk = safeEqualStr(name, AUTH_USERNAME);
+  const adminPassOk = verifyPassword(pw, AUTH_PASSWORD_HASH);
+
+  const record = users.findUser(name);
+  const clientPassOk = verifyPassword(pw, record ? record.passwordHash : users.DUMMY_HASH);
+
+  if (adminNameOk && adminPassOk) return ADMIN;
+  if (record && clientPassOk) {
+    return { username: record.username, role: "client", workspaces: record.workspaces.slice() };
+  }
+  return null;
 }
 
 // ── Session tokens ──
@@ -64,10 +84,28 @@ function sign(payloadB64) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(payloadB64).digest("base64url");
 }
 
+// A short fingerprint of the password hash the session was issued against.
+// Carried in the token so that changing a password ends every session opened
+// with the old one — which is the whole point of resetting a leaked password.
+// It is derived from a hash, never the password, and truncated so the cookie
+// gives away nothing useful about it.
+function passwordFingerprint(user) {
+  const stored = user.role === "admin" ? AUTH_PASSWORD_HASH : (users.findUser(user.username) || {}).passwordHash;
+  if (!stored) return null;
+  return crypto.createHash("sha256").update(String(stored)).digest("base64url").slice(0, 16);
+}
+
 function issueToken(username) {
+  const user = resolveUser(username);
+  if (!user) return null;
   const now = Date.now();
   const payload = Buffer.from(
-    JSON.stringify({ u: username, iat: now, exp: now + SESSION_HOURS * 3600 * 1000 })
+    JSON.stringify({
+      u: user.username,
+      k: passwordFingerprint(user),
+      iat: now,
+      exp: now + SESSION_HOURS * 3600 * 1000,
+    })
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
@@ -89,9 +127,17 @@ function readToken(token) {
     return null;
   }
   if (!payload || typeof payload.exp !== "number" || Date.now() > payload.exp) return null;
-  // Changing AUTH_USERNAME retires every session signed for the old one.
-  if (!safeEqualStr(payload.u || "", AUTH_USERNAME)) return null;
-  return payload.u;
+  // Resolved fresh every request, so changing AUTH_USERNAME retires every
+  // session signed for the old one, and deleting a client login logs it out
+  // on its very next request rather than whenever the cookie happens to expire.
+  const user = resolveUser(payload.u);
+  if (!user) return null;
+
+  // Same for a password change: the fingerprint no longer matches, so every
+  // session opened with the old password is refused from here on.
+  const current = passwordFingerprint(user);
+  if (!current || payload.k !== current) return null;
+  return user;
 }
 
 // ── Cookies ──
@@ -137,6 +183,7 @@ function clearSessionCookie(req, res) {
   res.setHeader("Set-Cookie", bits.join("; "));
 }
 
+// Returns the identity object ({ username, role, workspaces }) or null.
 function sessionUser(req) {
   if (!AUTH_ENABLED) return null;
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
@@ -210,6 +257,7 @@ module.exports = {
   COOKIE_NAME,
   SESSION_HOURS,
   verifyCredentials,
+  resolveUser,
   issueToken,
   readToken,
   sessionUser,

@@ -96,6 +96,118 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 }
 .sidebar-close:hover{background:rgba(255,255,255,0.1)}
 
+/* ── Add-account button + picker modal ── */
+.ws-add{
+  display:block;width:100%;margin-top:10px;padding:9px 10px;border-radius:9px;
+  border:1px dashed rgba(255,255,255,0.18);background:transparent;color:var(--dim);
+  font-size:12px;font-family:inherit;cursor:pointer;text-align:center;transition:all 0.15s;
+}
+.ws-add:hover{border-color:rgba(255,255,255,0.35);color:var(--text);background:rgba(255,255,255,0.04)}
+.modal-scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:20px;
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+}
+.modal-scrim.open{display:flex}
+.modal{
+  width:100%;max-width:560px;max-height:min(86vh,720px);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 24px 70px rgba(0,0,0,0.6);overflow:hidden;
+}
+.modal-head{padding:18px 20px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.modal-head h2{font-size:16px;font-weight:700;letter-spacing:-0.3px;color:#fff}
+.modal-head .sub{font-size:12px;color:var(--dim);margin-top:3px}
+.modal-body{padding:14px 20px;overflow-y:auto;flex:1 1 auto;-webkit-overflow-scrolling:touch}
+.modal-foot{
+  padding:14px 20px;border-top:1px solid var(--line);flex:0 0 auto;
+  display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;
+}
+.modal-foot .spacer{margin-right:auto;font-size:11px;color:var(--faint)}
+.modal-x{
+  position:absolute;top:14px;right:16px;width:30px;height:30px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);
+  color:var(--text);font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+}
+.modal-head{position:relative}
+.acct-search{
+  width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+  background:#0f0f0f;color:var(--text);font-size:16px;font-family:inherit;margin-bottom:10px;
+}
+.acct-search:focus{outline:none;border-color:rgba(255,255,255,0.35)}
+.acct-list{display:flex;flex-direction:column;gap:5px}
+.acct{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;border-radius:9px;border:1px solid transparent;
+  background:rgba(255,255,255,0.03);color:var(--text);cursor:pointer;font-family:inherit;
+}
+.acct:hover:not(:disabled){background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14)}
+.acct.sel{background:rgba(42,120,214,0.18);border-color:#2a78d6}
+.acct:disabled{opacity:0.4;cursor:not-allowed}
+.acct-main{min-width:0;flex:1}
+.acct-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-sub{font-size:11px;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-tag{font-size:10px;padding:2px 7px;border-radius:20px;flex:0 0 auto;white-space:nowrap}
+.tag-added{background:rgba(255,255,255,0.1);color:var(--dim)}
+.tag-off{background:rgba(224,105,105,0.15);color:#e06969}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;color:var(--dim);margin-bottom:5px;font-weight:600}
+.field input{
+  width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+  background:#0f0f0f;color:var(--text);font-size:16px;font-family:inherit;
+}
+.field input:focus{outline:none;border-color:rgba(255,255,255,0.35)}
+.field .hint{font-size:11px;color:var(--faint);margin-top:5px;line-height:1.45}
+.modal-err{
+  background:rgba(224,105,105,0.12);border:1px solid rgba(224,105,105,0.35);
+  color:#e88;font-size:12px;padding:9px 12px;border-radius:8px;margin-bottom:12px;display:none;
+}
+.modal-err.show{display:block}
+.acct-empty{text-align:center;color:var(--faint);font-size:12px;padding:26px 10px}
+.chan-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.chan-row:last-child{border-bottom:none}
+.chan-main{min-width:0;flex:1}
+.chan-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chan-sub{font-size:11px;color:var(--faint);margin-top:2px}
+.chan-input{
+  width:150px;flex:0 0 150px;padding:7px 10px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.15);background:#0f0f0f;color:var(--text);
+  font-size:16px;font-family:inherit;letter-spacing:0.02em;
+}
+.chan-input:focus{outline:none;border-color:rgba(255,255,255,0.35)}
+.chan-save{flex:0 0 auto}
+.chan-help{font-size:11px;color:var(--faint);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.chan-help code{background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px}
+/* Dashboard logins: same row shape as the channel list, with a wider input
+   because a password is typed here, not a fixed-length channel id. */
+.user-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.user-row:last-child{border-bottom:none}
+.user-main{min-width:0;flex:1 1 150px}
+.user-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-sub{font-size:11px;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-input{
+  width:170px;flex:0 0 170px;padding:7px 10px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.15);background:#0f0f0f;color:var(--text);
+  font-size:16px;font-family:inherit;
+}
+.user-input:focus{outline:none;border-color:rgba(255,255,255,0.35)}
+.btn-danger{border-color:rgba(224,105,105,0.35);color:#e88}
+.btn-danger:hover{background:rgba(224,105,105,0.15)}
+.user-admin{font-size:11px;color:var(--faint);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.user-admin code{background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:4px}
+@media(max-width:560px){
+  .user-main{flex:1 1 100%}
+  .user-input{flex:1 1 auto;width:auto}
+}
+@media(max-width:560px){
+  .chan-row{flex-wrap:wrap}
+  .chan-main{flex:1 1 100%}
+  .chan-input{flex:1 1 auto;width:auto}
+}
+@media(max-width:900px){
+  .modal-scrim{padding:0;align-items:stretch}
+  .modal{max-width:none;max-height:none;border-radius:0;height:100%}
+}
+
 @media(max-width:900px){
   .topbar{
     display:flex;align-items:center;gap:12px;
@@ -127,6 +239,20 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 @media(min-width:901px){
   .sidebar{transform:none !important}
   .nav-scrim{display:none}
+}
+
+/* ── Client mode ──
+   A client login is scoped to one account, so the whole navigation layer —
+   sidebar, drawer, and the bar that opens it — is removed rather than left
+   empty. The server is what actually enforces the scope; this just keeps the
+   page from offering doors that are already locked. */
+body.client-mode .sidebar,
+body.client-mode .topbar,
+body.client-mode .nav-scrim{display:none !important}
+@media(max-width:900px){
+  /* No drawer means no sidebar sign-out, so the header keeps its own. */
+  body.client-mode .wrap{padding-top:calc(var(--safe-t) + 14px)}
+  body.client-mode .header .btn-signout{display:inline-block}
 }
 
 /* ── Header ── */
@@ -348,10 +474,119 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   </div>
   <div class="sidebar-title">Accounts</div>
   <div id="wsList"></div>
+  <button class="ws-add" id="addAcctBtn" type="button">+ Add ad account</button>
+  <button class="ws-add" id="chanBtn" type="button">Slack channels</button>
+  <button class="ws-add" id="userBtn" type="button">Dashboard logins</button>
   <div class="sidebar-foot">
     <button class="btn btn-block" onclick="doSignOut()" title="End this session">Sign out</button>
   </div>
 </aside>
+
+<div class="modal-scrim" id="acctModal" role="dialog" aria-modal="true" aria-labelledby="acctModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="acctModalTitle">Add an ad account</h2>
+      <div class="sub" id="acctStep">Pick an account from Meta</div>
+      <button class="modal-x" id="acctClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-err" id="acctErr"></div>
+
+      <div id="stepPick">
+        <input class="acct-search" id="acctSearch" type="search" autocomplete="off"
+               placeholder="Search by name or account ID…" aria-label="Search ad accounts">
+        <div class="acct-list" id="acctList"></div>
+      </div>
+
+      <div id="stepDetails" style="display:none">
+        <div class="field">
+          <label for="fName">Display name</label>
+          <input id="fName" type="text" autocomplete="off">
+          <div class="hint">Shown in the sidebar and at the top of every Slack message.</div>
+        </div>
+        <div class="field">
+          <label for="fBudget">Monthly budget (USD)</label>
+          <input id="fBudget" type="number" min="1" step="100" inputmode="decimal" placeholder="5000">
+          <div class="hint">Drives pacing, the projection, and the 80% / 95% alerts. Editable later on the card.</div>
+        </div>
+        <div class="field">
+          <label for="fUser">Dashboard username</label>
+          <input id="fUser" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="acmeroofing">
+          <div class="hint">
+            The login this client signs in with. It opens this account and nothing else &mdash;
+            no sidebar, no other client&rsquo;s numbers. Lowercase letters, digits, dot, dash or underscore.
+          </div>
+        </div>
+        <div class="field">
+          <label for="fPass">Dashboard password</label>
+          <input id="fPass" type="text" autocomplete="new-password" placeholder="at least 6 characters">
+          <div class="hint">
+            Shown in the clear so you can copy it to the client &mdash; it is stored hashed and
+            can never be read back. Change it later under <em>Dashboard logins</em>.
+          </div>
+        </div>
+        <div class="field">
+          <label for="fSlack">Slack channel ID <span style="color:var(--faint);font-weight:400">&mdash; optional</span></label>
+          <input id="fSlack" type="text" autocomplete="off" placeholder="C0BTHN6RC2J">
+          <div class="hint">
+            Leave blank and this account stays off Slack — you can add a channel later.
+            Use the encoded ID (channel details → bottom), not <code>#name</code>.
+            Public channels need no invite; a <strong>private</strong> channel needs
+            <code>/invite @blendfold_bot</code> run in it once.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer" id="acctCount"></span>
+      <button class="btn" id="acctBack" type="button" style="display:none">Back</button>
+      <button class="btn" id="acctCancel" type="button">Cancel</button>
+      <button class="btn btn-save" id="acctSave" type="button" disabled>Add account</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-scrim" id="chanModal" role="dialog" aria-modal="true" aria-labelledby="chanModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="chanModalTitle">Slack channels</h2>
+      <div class="sub">Where each account&rsquo;s alerts and summaries are posted. Blank = not posting.</div>
+      <button class="modal-x" id="chanClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-err" id="chanErr"></div>
+      <div id="chanList"></div>
+      <div class="chan-help">
+        Use the encoded channel ID (channel details &rarr; bottom), not <code>#name</code> &mdash;
+        a rename breaks name-based routing. Public channels need no invite; a
+        <strong>private</strong> channel needs <code>/invite @blendfold_bot</code> run in it once.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer" id="chanNote"></span>
+      <button class="btn btn-save" id="chanDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-scrim" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="userModalTitle">Dashboard logins</h2>
+      <div class="sub">Who can sign in, and which account each one sees.</div>
+      <button class="modal-x" id="userClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-err" id="userErr"></div>
+      <div id="userList"></div>
+      <div class="user-admin" id="userAdminNote"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer" id="userNote"></span>
+      <button class="btn btn-save" id="userDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
 
 <div class="wrap">
   <div class="header">
@@ -380,7 +615,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     <strong>How this dashboard works</strong><br>
     Live spend numbers are pulled directly from Meta Ads every <span id="refreshInterval"></span> minutes — no manual updates needed.
     Each ad campaign is automatically sorted into the right county based on its name.
-    To change a county's monthly budget, click <em>Edit budget</em> — the new number is saved permanently and used for all future calculations.
+    <span id="footerBudgetNote">To change a county's monthly budget, click <em>Edit budget</em> — the new number is saved permanently and used for all future calculations.</span>
     Hover any metric (the small <strong>?</strong> icon) to see exactly what it means.
   </div>
 </div>
@@ -404,6 +639,35 @@ async function doSignOut() {
     await fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'same-origin' });
   } catch (e) { /* sign out locally regardless */ }
   toLogin();
+}
+
+// ── Who is signed in ──
+// "admin" sees every account and the controls that change them; "client" sees
+// exactly the account its login is scoped to. Assumed admin until /api/me
+// says otherwise, so a slow answer never flashes admin controls at a client —
+// the page stays hidden behind the loading screen until init() has resolved it.
+let me = { username: null, role: 'admin', authEnabled: false };
+const isAdminUser = () => me.role === 'admin';
+
+async function fetchMe() {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return null; }
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+// Everything a client must not reach is removed here, in one place, rather
+// than guarded at each call site. The server refuses these routes regardless —
+// this only keeps the page from showing controls that would 403.
+function applyRole() {
+  document.body.classList.toggle('client-mode', !isAdminUser());
+  ['addAcctBtn', 'chanBtn', 'userBtn'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isAdminUser() ? '' : 'none';
+  });
 }
 
 // ── Workspaces (sidebar) ──
@@ -454,6 +718,508 @@ async function switchWorkspace(id) {
 document.addEventListener('click', (e) => {
   const row = e.target.closest && e.target.closest('.ws-row');
   if (row) switchWorkspace(row.dataset.ws);
+});
+
+// ── Add-account picker ──
+// Two steps in one dialog: pick a Meta account, then name it, budget it, and
+// optionally point it at a Slack channel. The list comes from the token's own
+// /me/adaccounts, so an account is never typed in from memory.
+let acctAll = [];
+let acctPicked = null;
+
+const acctModal = document.getElementById('acctModal');
+const acctErr = document.getElementById('acctErr');
+
+function acctShowErr(msg) {
+  acctErr.textContent = msg;
+  acctErr.classList.add('show');
+}
+function acctClearErr() { acctErr.classList.remove('show'); }
+
+function openAcctModal() {
+  acctPicked = null;
+  acctClearErr();
+  document.getElementById('acctSearch').value = '';
+  document.getElementById('stepPick').style.display = '';
+  document.getElementById('stepDetails').style.display = 'none';
+  document.getElementById('acctBack').style.display = 'none';
+  document.getElementById('acctStep').textContent = 'Pick an account from Meta';
+  document.getElementById('acctSave').disabled = true;
+  document.getElementById('acctSave').textContent = 'Next';
+  document.getElementById('acctList').innerHTML =
+    '<div class="acct-empty">Loading accounts from Meta…</div>';
+  acctModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  loadAcctList();
+  setTimeout(function () { document.getElementById('acctSearch').focus(); }, 60);
+}
+
+function closeAcctModal() {
+  acctModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function loadAcctList() {
+  try {
+    const res = await fetch(API_BASE + '/api/meta/adaccounts', { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('acctList').innerHTML =
+        '<div class="acct-empty">' + esc(data.error) + '</div>';
+      return;
+    }
+    acctAll = data.accounts || [];
+    renderAcctList();
+  } catch (err) {
+    document.getElementById('acctList').innerHTML =
+      '<div class="acct-empty">Could not reach Meta: ' + esc(err.message) + '</div>';
+  }
+}
+
+function renderAcctList() {
+  const q = document.getElementById('acctSearch').value.trim().toLowerCase();
+  const rows = q
+    ? acctAll.filter(function (a) {
+        return a.name.toLowerCase().includes(q) ||
+          a.id.toLowerCase().includes(q) ||
+          (a.business && a.business.toLowerCase().includes(q));
+      })
+    : acctAll;
+
+  document.getElementById('acctCount').textContent =
+    rows.length + ' of ' + acctAll.length + ' account' + (acctAll.length === 1 ? '' : 's');
+
+  const el = document.getElementById('acctList');
+  if (!rows.length) {
+    el.innerHTML = '<div class="acct-empty">No accounts match that search.</div>';
+    return;
+  }
+  // Cap the DOM at 200 rows; search narrows it long before that matters.
+  el.innerHTML = rows.slice(0, 200).map(function (a) {
+    const sel = acctPicked && acctPicked.id === a.id ? ' sel' : '';
+    const tag = a.added
+      ? '<span class="acct-tag tag-added">on dashboard</span>'
+      : (!a.active ? '<span class="acct-tag tag-off">inactive</span>' : '');
+    const sub = [a.id, a.business, a.currency].filter(Boolean).join(' · ');
+    return '<button class="acct' + sel + '" data-acct="' + esc(a.id) + '" type="button"' +
+      (a.added ? ' disabled' : '') + '>' +
+      '<div class="acct-main">' +
+      '<div class="acct-name">' + esc(a.name) + '</div>' +
+      '<div class="acct-sub">' + esc(sub) + '</div>' +
+      '</div>' + tag + '</button>';
+  }).join('') + (rows.length > 200
+    ? '<div class="acct-empty">' + (rows.length - 200) + ' more — refine the search to see them.</div>'
+    : '');
+}
+
+function goToDetails() {
+  if (!acctPicked) return;
+  acctClearErr();
+  document.getElementById('stepPick').style.display = 'none';
+  document.getElementById('stepDetails').style.display = '';
+  document.getElementById('acctBack').style.display = '';
+  document.getElementById('acctCount').textContent = '';
+  document.getElementById('acctStep').textContent = acctPicked.name + ' · ' + acctPicked.id;
+  document.getElementById('acctSave').textContent = 'Add account';
+  document.getElementById('fName').value = acctPicked.name;
+  document.getElementById('fBudget').value = '';
+  document.getElementById('fSlack').value = '';
+  document.getElementById('fUser').value = '';
+  document.getElementById('fPass').value = '';
+  setTimeout(function () { document.getElementById('fBudget').focus(); }, 60);
+}
+
+function goToPick() {
+  acctClearErr();
+  document.getElementById('stepPick').style.display = '';
+  document.getElementById('stepDetails').style.display = 'none';
+  document.getElementById('acctBack').style.display = 'none';
+  document.getElementById('acctStep').textContent = 'Pick an account from Meta';
+  document.getElementById('acctSave').textContent = 'Next';
+  renderAcctList();
+}
+
+async function submitAccount() {
+  const btn = document.getElementById('acctSave');
+  const payload = {
+    accountId: acctPicked.id,
+    accountName: acctPicked.name,
+    name: document.getElementById('fName').value.trim(),
+    monthlyBudget: document.getElementById('fBudget').value,
+    slackChannel: document.getElementById('fSlack').value.trim(),
+    // The account and its login are created in one request, so an account
+    // never lands on the dashboard with no way for its owner to open it.
+    username: document.getElementById('fUser').value.trim(),
+    password: document.getElementById('fPass').value,
+  };
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  acctClearErr();
+  try {
+    const res = await fetch(API_BASE + '/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      acctShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.textContent = 'Add account';
+      return;
+    }
+    closeAcctModal();
+    const ws = await fetchWorkspaces();
+    if (ws) { workspaces = ws.workspaces; renderSidebar(); }
+    await switchWorkspace(data.workspace.id);
+  } catch (err) {
+    acctShowErr(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Add account';
+  }
+}
+
+document.getElementById('addAcctBtn').addEventListener('click', function () { closeNav(); openAcctModal(); });
+document.getElementById('acctClose').addEventListener('click', closeAcctModal);
+document.getElementById('acctCancel').addEventListener('click', closeAcctModal);
+document.getElementById('acctBack').addEventListener('click', goToPick);
+document.getElementById('acctSearch').addEventListener('input', renderAcctList);
+document.getElementById('acctSave').addEventListener('click', function () {
+  if (document.getElementById('stepDetails').style.display === 'none') goToDetails();
+  else submitAccount();
+});
+
+document.getElementById('acctList').addEventListener('click', function (e) {
+  const row = e.target.closest && e.target.closest('.acct');
+  if (!row || row.disabled) return;
+  acctPicked = acctAll.find(function (a) { return a.id === row.dataset.acct; }) || null;
+  document.getElementById('acctSave').disabled = !acctPicked;
+  renderAcctList();
+});
+
+// Enter submits from any detail field, so the form does not need a mouse.
+['fName', 'fBudget', 'fUser', 'fPass', 'fSlack'].forEach(function (id) {
+  document.getElementById(id).addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submitAccount(); }
+  });
+});
+
+acctModal.addEventListener('click', function (e) { if (e.target === acctModal) closeAcctModal(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && acctModal.classList.contains('open')) closeAcctModal();
+});
+
+// ── Slack channels dialog ──
+// One row per workspace, seed and UI-added alike, because every channel id
+// lives in the same map server-side. Blank clears a channel, which silences
+// that client without removing its account.
+const chanModal = document.getElementById('chanModal');
+const chanErr = document.getElementById('chanErr');
+
+function chanShowErr(msg) {
+  chanErr.textContent = msg;
+  chanErr.classList.add('show');
+}
+function chanClearErr() { chanErr.classList.remove('show'); }
+
+function openChanModal() {
+  chanClearErr();
+  document.getElementById('chanList').innerHTML =
+    '<div class="acct-empty">Loading…</div>';
+  chanModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  loadChannels();
+}
+
+function closeChanModal() {
+  chanModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function loadChannels() {
+  try {
+    const res = await fetch(API_BASE + '/api/channels', { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    renderChannels(data);
+  } catch (err) {
+    document.getElementById('chanList').innerHTML =
+      '<div class="acct-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+function renderChannels(data) {
+  const note = document.getElementById('chanNote');
+  if (note) {
+    note.textContent = data.botConfigured
+      ? 'Ops alerts (Meta token expiry) go to ' + (data.opsChannel || 'no channel — set SLACK_OPS_CHANNEL in .env')
+      : 'No SLACK_BOT_TOKEN set — nothing will post until it is.';
+  }
+  document.getElementById('chanList').innerHTML = (data.channels || []).map(function (c) {
+    return '<div class="chan-row" data-ws="' + esc(c.id) + '">' +
+      '<div class="chan-main">' +
+      '<div class="chan-name">' + esc(c.name) + '</div>' +
+      '<div class="chan-sub">' + c.geoCount + ' geo' + (c.geoCount === 1 ? '' : 's') +
+      (c.slackChannel ? '' : ' · not posting') + '</div>' +
+      '</div>' +
+      '<input class="chan-input" type="text" autocomplete="off" spellcheck="false" ' +
+      'placeholder="C0BTHN6RC2J" value="' + esc(c.slackChannel || '') + '" ' +
+      'aria-label="Slack channel for ' + esc(c.name) + '">' +
+      '<button class="btn btn-sm chan-save" type="button">Save</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function saveChannel(row) {
+  const id = row.dataset.ws;
+  const input = row.querySelector('.chan-input');
+  const btn = row.querySelector('.chan-save');
+  btn.disabled = true;
+  btn.textContent = '…';
+  chanClearErr();
+  try {
+    const res = await fetch(API_BASE + '/api/channels/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ slackChannel: input.value.trim() }),
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      chanShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      return;
+    }
+    input.value = data.slackChannel || '';
+    btn.textContent = 'Saved';
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }, 1400);
+    const sub = row.querySelector('.chan-sub');
+    if (sub) {
+      sub.textContent = sub.textContent.replace(' · not posting', '') +
+        (data.slackChannel ? '' : ' · not posting');
+    }
+    const ws = await fetchWorkspaces();
+    if (ws) { workspaces = ws.workspaces; renderSidebar(); }
+  } catch (err) {
+    chanShowErr(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+document.getElementById('chanBtn').addEventListener('click', function () { closeNav(); openChanModal(); });
+document.getElementById('chanClose').addEventListener('click', closeChanModal);
+document.getElementById('chanDone').addEventListener('click', closeChanModal);
+
+document.getElementById('chanList').addEventListener('click', function (e) {
+  const btn = e.target.closest && e.target.closest('.chan-save');
+  if (btn) saveChannel(btn.closest('.chan-row'));
+});
+
+document.getElementById('chanList').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  const input = e.target.closest && e.target.closest('.chan-input');
+  if (input) { e.preventDefault(); saveChannel(input.closest('.chan-row')); }
+});
+
+chanModal.addEventListener('click', function (e) { if (e.target === chanModal) closeChanModal(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && chanModal.classList.contains('open')) closeChanModal();
+});
+
+// ── Dashboard logins dialog (admin only) ──
+// One row per client login: reset its password, or revoke it. The admin's own
+// credentials are not listed — they live in .env, so no session can delete the
+// account that governs every other one.
+const userModal = document.getElementById('userModal');
+const userErr = document.getElementById('userErr');
+
+function userShowErr(msg) {
+  userErr.textContent = msg;
+  userErr.classList.add('show');
+}
+function userClearErr() { userErr.classList.remove('show'); }
+
+function openUserModal() {
+  userClearErr();
+  document.getElementById('userList').innerHTML = '<div class="acct-empty">Loading…</div>';
+  userModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  loadUsers();
+}
+
+function closeUserModal() {
+  userModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function loadUsers() {
+  try {
+    const res = await fetch(API_BASE + '/api/users', { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      document.getElementById('userList').innerHTML =
+        '<div class="acct-empty">' + esc(data.error || ('HTTP ' + res.status)) + '</div>';
+      return;
+    }
+    renderUsers(data);
+  } catch (err) {
+    document.getElementById('userList').innerHTML =
+      '<div class="acct-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+function renderUsers(data) {
+  const list = data.users || [];
+  const note = document.getElementById('userNote');
+  if (note) {
+    note.textContent = list.length
+      ? list.length + ' client login' + (list.length === 1 ? '' : 's')
+      : 'No client logins yet.';
+  }
+
+  const adminNote = document.getElementById('userAdminNote');
+  if (adminNote) {
+    adminNote.innerHTML = data.admin
+      ? 'Admin <code>' + esc(data.admin) + '</code> sees every account and is the only login that ' +
+        'can add or remove them. It is set in <code>.env</code>, so it cannot be changed here. ' +
+        'A client login opens only the account named beside it — with no sidebar, and no way to ' +
+        'reach another client&rsquo;s numbers. New logins are created together with the ad account, ' +
+        'under <em>Add ad account</em>.'
+      : '';
+  }
+
+  document.getElementById('userList').innerHTML = list.length
+    ? list.map(function (u) {
+        const scope = (u.workspaceNames || []).join(', ') || 'no account';
+        return '<div class="user-row" data-user="' + esc(u.username) + '">' +
+          '<div class="user-main">' +
+          '<div class="user-name">' + esc(u.username) + '</div>' +
+          '<div class="user-sub">' + esc(scope) + '</div>' +
+          '</div>' +
+          '<input class="user-input" type="text" autocomplete="new-password" spellcheck="false" ' +
+          'placeholder="new password" aria-label="New password for ' + esc(u.username) + '">' +
+          '<button class="btn btn-sm user-save" type="button">Set</button>' +
+          '<button class="btn btn-sm btn-danger user-del" type="button">Revoke</button>' +
+          '</div>';
+      }).join('')
+    : '<div class="acct-empty">No client logins yet — one is created with each ad account.</div>';
+}
+
+async function saveUserPassword(row) {
+  const username = row.dataset.user;
+  const input = row.querySelector('.user-input');
+  const btn = row.querySelector('.user-save');
+  const password = input.value;
+  userClearErr();
+  if (!password) { userShowErr('Type the new password first.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password: password }),
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      userShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.textContent = 'Set';
+      return;
+    }
+    // Cleared once saved — the field holds a live password, not something to
+    // leave sitting on screen.
+    input.value = '';
+    btn.textContent = 'Saved';
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = 'Set';
+    }, 1400);
+  } catch (err) {
+    userShowErr(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Set';
+  }
+}
+
+// Two clicks rather than a confirm() — a browser dialog blocks the page, and
+// revoking a login takes effect on that client's very next request.
+async function revokeUser(row) {
+  const username = row.dataset.user;
+  const btn = row.querySelector('.user-del');
+  userClearErr();
+
+  if (btn.dataset.armed !== '1') {
+    btn.dataset.armed = '1';
+    btn.textContent = 'Sure?';
+    setTimeout(function () {
+      if (btn.dataset.armed === '1') {
+        btn.dataset.armed = '';
+        btn.textContent = 'Revoke';
+      }
+    }, 4000);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      userShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.dataset.armed = '';
+      btn.textContent = 'Revoke';
+      return;
+    }
+    loadUsers();
+  } catch (err) {
+    userShowErr(err.message);
+    btn.disabled = false;
+    btn.dataset.armed = '';
+    btn.textContent = 'Revoke';
+  }
+}
+
+document.getElementById('userBtn').addEventListener('click', function () { closeNav(); openUserModal(); });
+document.getElementById('userClose').addEventListener('click', closeUserModal);
+document.getElementById('userDone').addEventListener('click', closeUserModal);
+
+document.getElementById('userList').addEventListener('click', function (e) {
+  if (!e.target.closest) return;
+  const save = e.target.closest('.user-save');
+  if (save) { saveUserPassword(save.closest('.user-row')); return; }
+  const del = e.target.closest('.user-del');
+  if (del) revokeUser(del.closest('.user-row'));
+});
+
+document.getElementById('userList').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  const input = e.target.closest && e.target.closest('.user-input');
+  if (input) { e.preventDefault(); saveUserPassword(input.closest('.user-row')); }
+});
+
+userModal.addEventListener('click', function (e) { if (e.target === userModal) closeUserModal(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && userModal.classList.contains('open')) closeUserModal();
 });
 
 // ── Mobile drawer ──
@@ -740,7 +1506,7 @@ function renderGeoCard(g) {
         </div>
         <div class="geo-actions">
           ${statusBadge(g.status)}
-          ${isEditing ? `
+          ${!isAdminUser() ? '' : isEditing ? `
             <div class="budget-edit">
               <input type="number" id="budget-input-${g.id}" value="${g.budget}" step="1000">
               <button class="btn btn-sm btn-save" onclick="saveBudget('${g.id}')">Save</button>
@@ -892,6 +1658,14 @@ async function loadData() {
 async function init() {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('dashboard').style.display = 'none';
+
+  // Resolve the role first, while the page is still behind the loading screen,
+  // so a client never sees admin controls painted and then removed.
+  const who = await fetchMe();
+  if (who) me = who;
+  applyRole();
+  const budgetNote = document.getElementById('footerBudgetNote');
+  if (budgetNote && !isAdminUser()) budgetNote.style.display = 'none';
 
   const ws = await fetchWorkspaces();
   if (ws) {

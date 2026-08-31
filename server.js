@@ -5,15 +5,22 @@ const fetch = require("node-fetch");
 const path = require("path");
 const fs = require("fs");
 const {
-  WORKSPACES,
-  GEOS,
   DEFAULT_WORKSPACE,
+  getWorkspaces,
+  getAllGeos,
   getAllAccountIds,
   getWorkspace,
   getGeos,
   getSlackWorkspaces,
+  getUsedAccountIds,
+  addAccount,
+  updateAccount,
+  removeAccount,
+  setChannel,
+  isEditable,
 } = require("./config");
 const auth = require("./auth");
+const users = require("./users");
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -57,7 +64,7 @@ let budgetOverrides = loadBudgetOverrides();
 
 function getEffectiveBudget(geoId) {
   if (budgetOverrides[geoId] !== undefined) return budgetOverrides[geoId];
-  const geo = GEOS.find((g) => g.id === geoId);
+  const geo = getAllGeos().find((g) => g.id === geoId);
   return geo ? geo.monthlyBudget : 0;
 }
 
@@ -295,7 +302,7 @@ async function postTokenWarning() {
 // ── Categorize campaigns into geos ──
 function categorizeCampaigns(apiResults) {
   const geoData = {};
-  GEOS.forEach((g) => {
+  getAllGeos().forEach((g) => {
     geoData[g.id] = { spent: 0, leads: 0, impressions: 0, clicks: 0, reach: 0, campaigns: [] };
   });
 
@@ -338,7 +345,7 @@ function categorizeCampaigns(apiResults) {
       // from every total, including Slack's) or in two geos (spend counted
       // twice) is visible in the logs instead of quietly skewing the numbers.
       const matchedGeos = [];
-      GEOS.forEach((geo) => {
+      getAllGeos().forEach((geo) => {
         geo.accounts.forEach((accConfig) => {
           if (accConfig.accountId !== accountId) return;
 
@@ -462,7 +469,7 @@ async function refreshData() {
     fetchError = null;
 
     console.log(`  Success! Geo totals:`);
-    GEOS.forEach((g) => {
+    getAllGeos().forEach((g) => {
       const d = cachedData[g.id];
       const budget = getEffectiveBudget(g.id);
       const pct = ((d.spent / budget) * 100).toFixed(1);
@@ -921,6 +928,42 @@ app.use((req, res, next) => {
   return res.redirect(302, "/login");
 });
 
+// ── Access scope ──
+// req.user is { username, role, workspaces } — or undefined when auth is off
+// entirely (local dev), which is treated as admin so nothing is gated away
+// from a developer running without .env credentials.
+//
+// A client sees only the workspaces on its record. That is enforced HERE, on
+// every read path, not in the UI: hiding the sidebar stops the honest visitor,
+// but ?workspace=someone-else is one keystroke away, so the server refuses it.
+function isAdmin(req) {
+  return !req.user || req.user.role === "admin";
+}
+
+// null means "no restriction"; otherwise a Set of the workspace ids allowed.
+function allowedWorkspaces(req) {
+  if (isAdmin(req)) return null;
+  return new Set(req.user.workspaces || []);
+}
+
+function canSeeWorkspace(req, workspaceId) {
+  const allowed = allowedWorkspaces(req);
+  return !allowed || allowed.has(workspaceId);
+}
+
+function visibleWorkspaces(req) {
+  const allowed = allowedWorkspaces(req);
+  return getWorkspaces().filter((w) => !allowed || allowed.has(w.id));
+}
+
+// Anything that CHANGES configuration — accounts, logins, budgets, Slack
+// routing — is the admin's alone. Returns true when it has already answered.
+function denyNonAdmin(req, res) {
+  if (isAdmin(req)) return false;
+  res.status(403).json({ error: "Admin access required" });
+  return true;
+}
+
 app.get("/login", (req, res) => {
   if (auth.AUTH_ENABLED && auth.sessionUser(req)) return res.redirect(302, "/");
   res.set("Cache-Control", "no-store");
@@ -941,10 +984,12 @@ app.use(express.static(path.join(__dirname, "public"), {
 
 // ── API Routes ──
 
-// GET /api/workspaces — sidebar rows, with a live spend total per workspace
+// GET /api/workspaces — sidebar rows, with a live spend total per workspace.
+// A client gets only its own row(s); it never learns another client exists.
 app.get("/api/workspaces", (req, res) => {
+  const visible = visibleWorkspaces(req);
   res.json({
-    workspaces: WORKSPACES.map((w) => {
+    workspaces: visible.map((w) => {
       const geos = getGeos(w.id);
       const spent = geos.reduce(
         (a, g) => a + (cachedData && cachedData[g.id] ? cachedData[g.id].spent : 0),
@@ -958,9 +1003,18 @@ app.get("/api/workspaces", (req, res) => {
         spent,
         budget,
         pctSpent: budget > 0 ? (spent / budget) * 100 : 0,
+        // Seed workspaces live in config.js and can't be edited from the UI;
+        // only UI-added ones expose the edit/remove controls.
+        editable: isAdmin(req) && isEditable(w.id),
+        accountId: w.accountId || null,
+        slackChannel: w.slackChannel || null,
       };
     }),
-    active: DEFAULT_WORKSPACE,
+    // The client's own account, not the global default it cannot open.
+    active: canSeeWorkspace(req, DEFAULT_WORKSPACE)
+      ? DEFAULT_WORKSPACE
+      : (visible[0] || {}).id || null,
+    role: isAdmin(req) ? "admin" : "client",
   });
 });
 
@@ -971,7 +1025,18 @@ app.get("/api/dashboard", (req, res) => {
   const dayOfMonth = getDayOfMonth();
   const daysLeft = daysInMonth - dayOfMonth;
 
-  const wsId = getWorkspace(String(req.query.workspace || "")) ? String(req.query.workspace) : DEFAULT_WORKSPACE;
+  // ?workspace= is a request, not a grant: a client asking for an account it
+  // is not scoped to falls back to its own rather than seeing another's spend.
+  const requested = String(req.query.workspace || "");
+  const fallback = canSeeWorkspace(req, DEFAULT_WORKSPACE)
+    ? DEFAULT_WORKSPACE
+    : (visibleWorkspaces(req)[0] || {}).id;
+  const wsId =
+    getWorkspace(requested) && canSeeWorkspace(req, requested) ? requested : fallback;
+
+  if (!wsId) {
+    return res.status(403).json({ error: "This login has no accounts assigned to it." });
+  }
 
   const geos = getGeos(wsId).map((g) => {
     const data = cachedData ? cachedData[g.id] : { spent: 0, leads: 0, campaigns: [] };
@@ -1053,8 +1118,203 @@ app.get("/api/dashboard", (req, res) => {
   });
 });
 
+// ── Meta ad-account discovery ──
+// Lists every ad account the token can reach, so accounts are picked from a
+// real list instead of typed from memory. Cached briefly: the list changes
+// rarely and the picker re-queries on every keystroke-free open.
+let adAccountCache = { at: 0, accounts: null };
+const AD_ACCOUNT_TTL_MS = 5 * 60 * 1000;
+
+async function fetchAdAccounts() {
+  if (!META_ACCESS_TOKEN) {
+    throw new Error("No Meta token configured — set META_ACCESS_TOKEN in .env");
+  }
+  if (adAccountCache.accounts && Date.now() - adAccountCache.at < AD_ACCOUNT_TTL_MS) {
+    return adAccountCache.accounts;
+  }
+
+  let url =
+    `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?` +
+    new URLSearchParams({
+      fields: "id,name,account_status,currency,timezone_name,business_name",
+      limit: "200",
+      access_token: META_ACCESS_TOKEN,
+    });
+
+  const accounts = [];
+  while (url) {
+    const response = await fetch(url);
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body || body.error) {
+      throw metaError("me/adaccounts", response.status, body);
+    }
+    if (Array.isArray(body.data)) accounts.push(...body.data);
+    url = (body.paging && body.paging.next) || null;
+  }
+
+  // 1 = ACTIVE. Everything else (closed, disabled, unsettled) still shows,
+  // flagged, because a paused account is a legitimate thing to add early.
+  const mapped = accounts.map((a) => ({
+    id: a.id,
+    name: a.name || a.id,
+    business: a.business_name || null,
+    currency: a.currency || null,
+    timezone: a.timezone_name || null,
+    active: a.account_status === 1,
+  }));
+  mapped.sort((a, b) => a.name.localeCompare(b.name));
+  adAccountCache = { at: Date.now(), accounts: mapped };
+  return mapped;
+}
+
+// GET /api/meta/adaccounts?q= — searchable list for the account picker
+app.get("/api/meta/adaccounts", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  try {
+    const all = await fetchAdAccounts();
+    const used = getUsedAccountIds();
+    const q = String(req.query.q || "").trim().toLowerCase();
+    const matches = q
+      ? all.filter(
+          (a) =>
+            a.name.toLowerCase().includes(q) ||
+            a.id.toLowerCase().includes(q) ||
+            (a.business && a.business.toLowerCase().includes(q))
+        )
+      : all;
+    res.json({
+      accounts: matches.map((a) => ({ ...a, added: used.has(a.id) })),
+      total: all.length,
+      matched: matches.length,
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ── Slack channel routing ──
+// Every workspace's channel lives in one map in accounts.json, so seed and
+// UI-added clients are read and written through the same two endpoints.
+
+// GET /api/channels — the routing table behind the "Slack channels" dialog
+app.get("/api/channels", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  res.json({
+    channels: getWorkspaces().map((w) => ({
+      id: w.id,
+      name: w.name,
+      slackChannel: w.slackChannel,
+      geoCount: getGeos(w.id).length,
+    })),
+    botConfigured: Boolean(SLACK_BOT_TOKEN),
+    opsChannel: SLACK_OPS_CHANNEL || null,
+  });
+});
+
+// PUT /api/channels/:id — set or clear one workspace's Slack channel.
+// An empty value clears it, which stops that client's messages without
+// removing the account from the dashboard.
+app.put("/api/channels/:id", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  try {
+    const channel = setChannel(req.params.id, (req.body || {}).slackChannel);
+    console.log(
+      `[CHANNELS] ${req.params.id} → ${channel || "none (Slack off for this client)"}`
+    );
+    res.json({ success: true, id: req.params.id, slackChannel: channel });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/accounts — add an ad account as a new workspace, plus the login
+// that client will use to reach it. The two are created together so an
+// account never exists on the dashboard with no way for its owner to see it.
+app.post("/api/accounts", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  const { accountId, accountName, name, monthlyBudget, slackChannel, username, password } =
+    req.body || {};
+
+  // Validate the login BEFORE the workspace is written, so a rejected
+  // username or password can't leave a half-built account behind.
+  try {
+    users.validateUsername(username, { reservedAdmin: auth.AUTH_USERNAME });
+    users.validatePassword(password);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  let created;
+  try {
+    created = addAccount({ accountId, accountName, name, monthlyBudget, slackChannel });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  let login;
+  try {
+    login = users.addUser({
+      username,
+      password,
+      workspaces: [created.id],
+      reservedAdmin: auth.AUTH_USERNAME,
+    });
+  } catch (err) {
+    // Pre-validated above, so this is a genuine surprise (a failed write, say)
+    // — undo the workspace rather than strand it without a login.
+    removeAccount(created.id);
+    return res.status(400).json({ error: err.message });
+  }
+
+  console.log(
+    `[ACCOUNTS] added ${created.name} (${created.accountId}) — login "${login.username}"` +
+      (created.slackChannel ? ` → Slack ${created.slackChannel}` : " — no Slack channel")
+  );
+
+  // Pull the new account's numbers straight away so its card isn't blank
+  // until the next hourly refresh.
+  await refreshData();
+  res.json({ success: true, workspace: created, login: login.username });
+});
+
+// PATCH /api/accounts/:id — edit a UI-added account (Slack channel, name, budget)
+app.patch("/api/accounts/:id", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  try {
+    const updated = updateAccount(req.params.id, req.body || {});
+    console.log(
+      `[ACCOUNTS] updated ${updated.name} — Slack ${updated.slackChannel || "none"}`
+    );
+    res.json({ success: true, workspace: updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/accounts/:id — remove a UI-added account
+app.delete("/api/accounts/:id", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  try {
+    const removed = removeAccount(req.params.id);
+    // A login that existed only for this account goes with it — otherwise it
+    // would survive as a session that can see nothing.
+    const droppedLogins = users.detachWorkspace(req.params.id);
+    console.log(
+      `[ACCOUNTS] removed ${removed.name} (${removed.accountId})` +
+        (droppedLogins.length ? ` — logins removed: ${droppedLogins.join(", ")}` : "")
+    );
+    await refreshData();
+    res.json({ success: true, workspace: removed, removedLogins: droppedLogins });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // POST /api/budget — update budget for a geo
 app.post("/api/budget", (req, res) => {
+  // Budgets drive pacing and the alert thresholds — a client views them, the
+  // admin sets them.
+  if (denyNonAdmin(req, res)) return;
   const { geoId, budget } = req.body;
   if (!geoId || budget === undefined) {
     return res.status(400).json({ error: "geoId and budget required" });
@@ -1072,18 +1332,21 @@ app.post("/api/refresh", async (req, res) => {
 
 // POST /api/daily-summary — manually trigger the daily Slack summary (for testing)
 app.post("/api/daily-summary", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
   await postDailyLeadSummary();
   res.json({ success: true });
 });
 
 // POST /api/pacing-check — manually trigger the weekly pacing Slack summary (for testing)
 app.post("/api/pacing-check", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
   await postWeeklyPacingCheck();
   res.json({ success: true });
 });
 
 // POST /api/weekly-results — manually trigger the weekly results summary (for testing)
 app.post("/api/weekly-results", async (req, res) => {
+  if (denyNonAdmin(req, res)) return;
   await postWeeklyResultsSummary();
   res.json({ success: true });
 });
@@ -1114,11 +1377,14 @@ app.post("/api/login", (req, res) => {
 
   const { username, password } = req.body || {};
 
-  if (auth.verifyCredentials(username, password)) {
+  // Returns the identity behind the credentials — the admin from .env, or a
+  // client login from users.json — so the cookie is signed for whoever it is.
+  const identity = auth.verifyCredentials(username, password);
+  if (identity) {
     auth.recordSuccess(req);
-    auth.setSessionCookie(req, res, auth.issueToken(auth.AUTH_USERNAME));
-    console.log(`[AUTH] Login OK from ${req.ip}`);
-    return res.json({ success: true });
+    auth.setSessionCookie(req, res, auth.issueToken(identity.username));
+    console.log(`[AUTH] Login OK — ${identity.username} (${identity.role}) from ${req.ip}`);
+    return res.json({ success: true, role: identity.role });
   }
 
   const result = auth.recordFailure(req);
@@ -1138,7 +1404,101 @@ app.post("/api/logout", (req, res) => {
 });
 
 app.get("/api/me", (req, res) => {
-  res.json({ username: req.user || null, authEnabled: auth.AUTH_ENABLED });
+  // With auth off there is no session at all; the UI treats that as admin,
+  // which matches what the API already allows in that mode.
+  res.json({
+    username: req.user ? req.user.username : null,
+    role: isAdmin(req) ? "admin" : "client",
+    workspaces: req.user && req.user.workspaces ? req.user.workspaces : null,
+    authEnabled: auth.AUTH_ENABLED,
+  });
+});
+
+// ── Dashboard logins (admin only) ──
+// One login per client, scoped to the ad account(s) it may open. The admin's
+// own credentials are not here — they live in .env and cannot be edited from
+// the UI, so no session can ever remove or re-scope the account that governs
+// every other one.
+
+// GET /api/users — the rows behind the "Dashboard logins" dialog
+app.get("/api/users", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  const names = new Map(getWorkspaces().map((w) => [w.id, w.name]));
+  res.json({
+    admin: auth.AUTH_USERNAME || null,
+    minPassword: users.MIN_PASSWORD,
+    users: users.listUsers().map((u) => ({
+      ...u,
+      // A workspace can be deleted straight out of config.js, so resolve the
+      // label defensively rather than assuming every id still exists.
+      workspaceNames: u.workspaces.map((id) => names.get(id) || id),
+    })),
+    workspaces: getWorkspaces().map((w) => ({ id: w.id, name: w.name })),
+  });
+});
+
+// POST /api/users — add a login for an account that already exists
+app.post("/api/users", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  const { username, password, workspaces } = req.body || {};
+  const scope = Array.isArray(workspaces) ? workspaces : [workspaces].filter(Boolean);
+  const known = new Set(getWorkspaces().map((w) => w.id));
+  const unknown = scope.filter((id) => !known.has(id));
+  if (unknown.length) {
+    return res.status(400).json({ error: `Unknown account: ${unknown.join(", ")}` });
+  }
+  try {
+    const created = users.addUser({
+      username,
+      password,
+      workspaces: scope,
+      reservedAdmin: auth.AUTH_USERNAME,
+    });
+    console.log(`[USERS] added login "${created.username}" → ${created.workspaces.join(", ")}`);
+    res.json({ success: true, user: created });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/users/:username — reset the password, or re-scope which
+// accounts the login can open
+app.patch("/api/users/:username", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  const { password, workspaces } = req.body || {};
+  try {
+    let result = null;
+    if (workspaces !== undefined) {
+      const scope = Array.isArray(workspaces) ? workspaces : [workspaces].filter(Boolean);
+      const known = new Set(getWorkspaces().map((w) => w.id));
+      const unknown = scope.filter((id) => !known.has(id));
+      if (unknown.length) {
+        return res.status(400).json({ error: `Unknown account: ${unknown.join(", ")}` });
+      }
+      result = users.setWorkspaces(req.params.username, scope);
+    }
+    if (password !== undefined && password !== "") {
+      result = users.setPassword(req.params.username, password);
+    }
+    if (!result) return res.status(400).json({ error: "Nothing to change" });
+    console.log(`[USERS] updated login "${result.username}"`);
+    res.json({ success: true, user: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/users/:username — revoke a login. The next request on its
+// cookie resolves to nobody, so an open tab is signed out immediately.
+app.delete("/api/users/:username", (req, res) => {
+  if (denyNonAdmin(req, res)) return;
+  try {
+    const removed = users.removeUser(req.params.username);
+    console.log(`[USERS] removed login "${removed.username}"`);
+    res.json({ success: true, user: removed });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ── Cron: auto-refresh ──
@@ -1196,8 +1556,9 @@ app.listen(PORT, async () => {
   console.log(`  Auto-refresh: every ${REFRESH_MINUTES} minutes`);
   if (SLACK_BOT_TOKEN) {
     const routed = getSlackWorkspaces();
-    console.log(`  Slack: bot token set — ${routed.length} of ${WORKSPACES.length} workspace(s) routed`);
-    WORKSPACES.forEach((w) => {
+    const all = getWorkspaces();
+    console.log(`  Slack: bot token set — ${routed.length} of ${all.length} workspace(s) routed`);
+    all.forEach((w) => {
       const dest = w.slackChannel ? w.slackChannel : "no channel — silent";
       console.log(`    ${w.name}: ${dest}`);
     });
@@ -1206,7 +1567,12 @@ app.listen(PORT, async () => {
     console.log("  Slack: disabled (no SLACK_BOT_TOKEN)");
   }
   if (auth.AUTH_ENABLED) {
-    console.log(`  Login: required (user "${auth.AUTH_USERNAME}", ${auth.SESSION_HOURS}h sessions)`);
+    const clients = users.listUsers();
+    console.log(
+      `  Login: required — admin "${auth.AUTH_USERNAME}" + ${clients.length} client login(s)` +
+        `, ${auth.SESSION_HOURS}h sessions`
+    );
+    clients.forEach((u) => console.log(`    ${u.username} → ${u.workspaces.join(", ") || "(no account)"}`));
   } else {
     console.warn(`  Login: DISABLED — anyone who can reach this port sees the dashboard.`);
     console.warn(`         Set AUTH_USERNAME, AUTH_PASSWORD_HASH and SESSION_SECRET in .env.`);
