@@ -652,6 +652,15 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .btn-ico,.modal-x,.sidebar-close,.hamburger,.side-toggle{background:transparent !important;border-color:transparent !important;color:var(--muted)}
 .btn-ico:hover:not(:disabled),.modal-x:hover,.sidebar-close:hover,.hamburger:hover,.side-toggle:hover{background:transparent !important;color:var(--text-strong)}
 .btn-ico:focus-visible,.modal-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── Account menu: opens above the profile row on click ── */
+.account{position:relative}
+.account-who{width:100%;border:none;background:transparent;font-family:inherit;color:inherit;cursor:pointer;text-align:left;border-radius:4px}
+.account-who:hover{background:var(--lift)}
+.account-who[aria-expanded="true"]{background:var(--lift)}
+.account-menu{margin-bottom:6px;padding:4px;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+.account-menu[hidden]{display:none}
+.account-actions{display:contents}
 </style>
 </head>
 <body>
@@ -705,17 +714,17 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   <div id="wsList"></div>
   <button class="ws-add" id="addAcctBtn" type="button" title="Add ad account"><svg class="ico"><use href="#i-plus"/></svg><span class="lbl">Add ad account</span></button>
   <div class="account" id="accountPanel">
-    <div class="account-who">
+    <div class="account-menu" id="accountMenu" hidden>
+      <button class="account-btn" id="settingsBtn" type="button" onclick="openSettings()" title="Settings"><svg class="ico"><use href="#i-settings"/></svg><span class="lbl">Settings</span></button>
+      <button class="account-btn" type="button" onclick="doSignOut()" title="Sign out"><svg class="ico"><use href="#i-logout"/></svg><span class="lbl">Sign out</span></button>
+    </div>
+    <button class="account-who" id="accountWho" type="button" aria-haspopup="true" aria-expanded="false" title="Account">
       <span class="account-avatar" id="accountAvatar">—</span>
       <div class="account-text">
         <div class="account-name" id="accountName">Signed in</div>
         <div class="account-role" id="accountRole"></div>
       </div>
-    </div>
-    <div class="account-actions">
-      <button class="account-btn" id="settingsBtn" type="button" onclick="openSettings()" title="Settings"><svg class="ico"><use href="#i-settings"/></svg><span class="lbl">Settings</span></button>
-      <button class="account-btn" type="button" onclick="doSignOut()" title="Sign out"><svg class="ico"><use href="#i-logout"/></svg><span class="lbl">Sign out</span></button>
-    </div>
+    </button>
   </div>
 </aside>
 
@@ -2064,6 +2073,19 @@ document.addEventListener('keydown', (e) => {
 });
 document.getElementById('campRange').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !campData) return; campRangeKey = b.dataset.days; renderCampaign(); });
 window.addEventListener('resize', () => { if (campData && breakdownView.style.display !== 'none') drawCampaignCharts(campRangeDays()); });
+
+// ── Account menu ──
+const accountWho = document.getElementById('accountWho');
+const accountMenu = document.getElementById('accountMenu');
+function toggleAccountMenu(force) {
+  const open = force !== undefined ? force : accountMenu.hidden;
+  accountMenu.hidden = !open;
+  accountWho.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+accountWho.addEventListener('click', (e) => { e.stopPropagation(); toggleAccountMenu(); });
+document.addEventListener('click', (e) => { if (!accountMenu.hidden && !e.target.closest('#accountPanel')) toggleAccountMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !accountMenu.hidden) toggleAccountMenu(false); });
+accountMenu.addEventListener('click', () => toggleAccountMenu(false));
 
 // ── Mobile drawer ──
 // Below 900px the sidebar is off-canvas; above it, it is always in view and
