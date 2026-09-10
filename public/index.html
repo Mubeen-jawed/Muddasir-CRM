@@ -588,6 +588,26 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .chart figcaption small{font-weight:400;color:var(--dim);font-size:11px}
 .chart canvas{width:100%;height:180px;display:block}
 @media(max-width:700px){.charts{grid-template-columns:1fr}}
+
+/* ── Alerts dropdown ── */
+.alerts-wrap{position:relative}
+.alerts-count{position:absolute;top:-7px;right:-4px;color:var(--danger);font-size:10px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.alerts-menu{position:absolute;top:calc(100% + 6px);right:0;width:min(380px,calc(100vw - 32px));max-height:min(60vh,520px);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:4px;z-index:90}
+.alerts-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--text-strong)}
+.alerts-sub{font-weight:400;color:var(--dim);font-size:11px}
+.alert-item{padding:10px 14px;border-bottom:1px solid var(--line-soft);font-size:12px;line-height:1.45}
+.alert-item:last-child{border-bottom:none}
+.alert-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:2px}
+.alert-word{font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase}
+.alert-word.danger,.alert-word.warn{color:var(--danger)}
+.alert-word.info{color:var(--ok)}
+.alert-time{font-size:10px;color:var(--faint);white-space:nowrap}
+.alert-body{color:var(--text)}
+.alert-body strong{font-weight:600;color:var(--text-strong)}
+.alert-item.cleared{opacity:0.55}
+.alert-item.cleared .alert-word{color:var(--dim)}
+.alert-empty{padding:18px 14px;font-size:12px;color:var(--faint);text-align:center}
+#alerts{display:none}
 </style>
 </head>
 <body>
@@ -604,6 +624,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></symbol>
   <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
 </svg>
 
@@ -781,6 +802,13 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     </div>
     <div class="header-actions">
       <div class="header-buttons">
+        <div class="alerts-wrap">
+          <button class="btn btn-ico" id="alertsBtn" type="button" title="Alerts" aria-label="Alerts" aria-haspopup="true" aria-expanded="false"><svg class="ico"><use href="#i-bell"/></svg><span class="alerts-count" id="alertsCount" hidden></span></button>
+          <div class="alerts-menu" id="alertsMenu" hidden>
+            <div class="alerts-head"><span>Alerts</span><span class="alerts-sub" id="alertsSub"></span></div>
+            <div class="alerts-list" id="alertsList"></div>
+          </div>
+        </div>
         <button class="btn btn-ico btn-theme" id="themeBtn" type="button" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
       </div>
       <div class="live-badge" id="liveBadge" data-state="live" title="">
@@ -2023,31 +2051,76 @@ function barColor(status) {
 }
 
 function renderAlerts(geos) {
-  let html = '';
+  const items = [];
   geos.forEach(g => {
     const projPct = g.budget > 0 ? (g.projectedEOM / g.budget) * 100 : 0;
     if (g.spent > g.budget) {
       const over = g.spent - g.budget;
-      html += `<div class="alert alert-danger">
-        <div><strong>${g.name}</strong> is ${fmt(over)} over the ${fmt(g.budget)} budget (${Math.round(g.pctSpent)}% spent) — pause or reduce immediately</div>
-      </div>`;
+      items.push({ key: g.id + ':over', level: 'danger', label: 'Over budget', geo: g.name,
+        text: `${fmt(over)} over the ${fmt(g.budget)} budget (${Math.round(g.pctSpent)}% spent) — pause or reduce immediately` });
     } else if (g.status === 'over_budget') {
-      html += `<div class="alert alert-danger">
-        <div><strong>${g.name}</strong> is over-pacing — at last week's rate, month will finish at ${fmt(g.projectedEOM)} (${Math.round(projPct)}% of ${fmt(g.budget)} budget). Slow down.</div>
-      </div>`;
+      items.push({ key: g.id + ':overpace', level: 'danger', label: 'Over budget', geo: g.name,
+        text: `over-pacing — at last week's rate the month finishes at ${fmt(g.projectedEOM)} (${Math.round(projPct)}% of ${fmt(g.budget)}). Slow down.` });
     } else if (g.status === 'at_risk') {
-      html += `<div class="alert alert-warn">
-        <div><strong>${g.name}</strong> is overshooting — projected ${fmt(g.projectedEOM)} by month-end (${Math.round(projPct)}% of budget). Consider slight pullback.</div>
-      </div>`;
+      items.push({ key: g.id + ':risk', level: 'warn', label: 'Overshooting', geo: g.name,
+        text: `projected ${fmt(g.projectedEOM)} by month-end (${Math.round(projPct)}% of budget). Consider a slight pullback.` });
     } else if (g.status === 'under_pacing') {
       const shortfall = g.budget - g.projectedEOM;
-      html += `<div class="alert alert-info">
-        <div><strong>${g.name}</strong> is under-spending — at last week's rate, only ${fmt(g.projectedEOM)} will land by month-end (${fmt(shortfall)} under the ${fmt(g.budget)} budget). Room to scale up.</div>
-      </div>`;
+      items.push({ key: g.id + ':under', level: 'info', label: 'Under-spending', geo: g.name,
+        text: `only ${fmt(g.projectedEOM)} will land by month-end at last week's rate (${fmt(shortfall)} under the ${fmt(g.budget)} budget). Room to scale up.` });
     }
   });
-  return html;
+  return items;
 }
+
+// ── Alerts dropdown ──
+// Active alerts come from the current data; a per-browser log keeps the last
+// 30 (per workspace) so an alert that cleared is still readable for a week.
+const alertsBtn = document.getElementById('alertsBtn');
+const alertsMenu = document.getElementById('alertsMenu');
+function alertsKey() { return 'alerts:' + (currentWorkspace || 'default'); }
+function readAlertLog() { try { return JSON.parse(localStorage.getItem(alertsKey()) || '[]'); } catch (e) { return []; } }
+function writeAlertLog(log) { try { localStorage.setItem(alertsKey(), JSON.stringify(log.slice(0, 30))); } catch (e) { /* private mode */ } }
+
+function updateAlerts(items) {
+  const now = Date.now();
+  const log = readAlertLog();
+  const byKey = new Map(log.map((a) => [a.key, a]));
+  items.forEach((it) => {
+    const prev = byKey.get(it.key);
+    if (prev && prev.text === it.text) { prev.lastSeen = now; prev.active = true; return; }
+    byKey.set(it.key, { ...it, firstSeen: now, lastSeen: now, active: true });
+  });
+  const activeKeys = new Set(items.map((i) => i.key));
+  const merged = [...byKey.values()].map((a) => ({ ...a, active: activeKeys.has(a.key) && a.text === (items.find((i) => i.key === a.key) || {}).text }))
+    .filter((a) => a.active || now - a.lastSeen < 7 * 86400 * 1000)
+    .sort((x, y) => (y.active - x.active) || (y.lastSeen - x.lastSeen));
+  writeAlertLog(merged);
+  renderAlertsMenu(merged);
+}
+
+function renderAlertsMenu(log) {
+  const active = log.filter((a) => a.active);
+  const count = document.getElementById('alertsCount');
+  count.textContent = active.length ? String(active.length) : '';
+  count.hidden = !active.length;
+  alertsBtn.title = active.length ? `${active.length} active alert${active.length === 1 ? '' : 's'}` : 'No active alerts';
+  document.getElementById('alertsSub').textContent = active.length ? `${active.length} active` : 'nothing needs attention';
+  document.getElementById('alertsList').innerHTML = log.length ? log.map((a) => `
+    <div class="alert-item ${a.active ? '' : 'cleared'}">
+      <div class="alert-top"><span class="alert-word ${esc(a.level)}">${esc(a.label)}</span><span class="alert-time">${a.active ? 'since ' + relativeTime(a.firstSeen) : 'cleared ' + relativeTime(a.lastSeen)}</span></div>
+      <div class="alert-body">${a.geo ? '<strong>' + esc(a.geo) + '</strong> ' : ''}${esc(a.text)}</div>
+    </div>`).join('') : '<div class="alert-empty">No alerts in the last 7 days.</div>';
+}
+
+function toggleAlertsMenu(force) {
+  const open = force !== undefined ? force : alertsMenu.hidden;
+  alertsMenu.hidden = !open;
+  alertsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+alertsBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleAlertsMenu(); });
+document.addEventListener('click', (e) => { if (!alertsMenu.hidden && !e.target.closest('.alerts-wrap')) toggleAlertsMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !alertsMenu.hidden) toggleAlertsMenu(false); });
 
 function renderSummary(summary, geos) {
   // Portfolio-level projected EOM — sum of per-geo last-7d projections.
@@ -2235,19 +2308,15 @@ function render() {
 
   document.getElementById('monthLabel').textContent =
     `${dashData.meta.workspaceName || 'Ben ADU'} — ${dashData.meta.month}`;
-  document.getElementById('alerts').innerHTML = renderAlerts(dashData.geos);
+  const alertItems = renderAlerts(dashData.geos);
+  if (dashData.meta.error) alertItems.unshift({ key: 'fetch-error', level: 'info', label: 'Fetch error', text: dashData.meta.error });
+  updateAlerts(alertItems);
   document.getElementById('summary').innerHTML = renderSummary(dashData.summary, dashData.geos);
   document.getElementById('geoCards').innerHTML = dashData.geos.map(renderGeoCard).join('');
   document.getElementById('refreshInterval').textContent = dashData.meta.refreshIntervalMinutes;
 
   updateLiveBadge();
 
-  if (dashData.meta.error) {
-    const alertsEl = document.getElementById('alerts');
-    alertsEl.innerHTML = `<div class="alert alert-info">
-      <div>${dashData.meta.error}</div>
-    </div>` + alertsEl.innerHTML;
-  }
 }
 
 async function loadData() {
