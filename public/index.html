@@ -646,6 +646,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── Chart skeleton ── */
 .chart-skel{position:absolute;left:52px;right:22px;top:38px;bottom:30px;display:flex;align-items:flex-end;gap:6px;pointer-events:none}
+.chart-skel[hidden],.chart-tip[hidden]{display:none !important}
 .chart-skel .sk{flex:1;height:40%;border-radius:2px}
 /* ── Icon buttons carry no fill or border; only the glyph ── */
 .btn-ico,.modal-x,.sidebar-close,.hamburger,.side-toggle{background:transparent !important;border-color:transparent !important;color:var(--muted)}
@@ -1251,6 +1252,8 @@ function showView(view) {
   document.getElementById('budgetView').style.display = view === 'budget' ? '' : 'none';
   document.getElementById('creativeView').style.display = view === 'creative' ? '' : 'none';
   document.getElementById('breakdownView').style.display = isBreakdown ? '' : 'none';
+  // The Budget / Creative switch belongs to the dashboard, not to a breakdown page.
+  document.getElementById('viewTabs').style.display = isBreakdown ? 'none' : '';
   const h1 = document.querySelector('.header h1');
   if (h1) h1.textContent = isBreakdown ? 'Breakdown' : view === 'creative' ? 'Creative performance' : 'Budget pacing';
   const bar = document.querySelector('.topbar-title');
