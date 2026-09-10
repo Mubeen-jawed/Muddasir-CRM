@@ -61,26 +61,26 @@
   --host-danger:var(--danger);
 }
 :root[data-theme="dark"]{
-  --bg:#000000;
-  --panel:#000000;
-  --panel-alt:#000000;
-  --hover:rgba(59,130,246,0.12);
-  --line:#1f2733;
-  --line-soft:#161c25;
-  --text:#e6e9ee;
-  --text-strong:#ffffff;
-  --muted:#9aa4b2;
-  --dim:#7d8795;
-  --faint:#5f6977;
-  --accent:#3b82f6;
-  --accent-strong:#7fb0ff;
-  --accent-soft:rgba(59,130,246,0.16);
+  --bg:#141619;
+  --panel:#141619;
+  --panel-alt:#141619;
+  --hover:rgba(96,150,255,0.10);
+  --line:#262a31;
+  --line-soft:#1f2329;
+  --text:#dfe3e8;
+  --text-strong:#f2f4f7;
+  --muted:#a0a8b4;
+  --dim:#848d99;
+  --faint:#646c78;
+  --accent:#5b93f5;
+  --accent-strong:#8fb5ff;
+  --accent-soft:rgba(91,147,245,0.16);
   --on-accent:#ffffff;
-  --input-bg:#000000;
-  --scrim:rgba(0,0,0,0.72);
-  --lift:#161819;
-  --ok:#22c55e;
-  --danger:#ef4444;
+  --input-bg:#141619;
+  --scrim:rgba(0,0,0,0.6);
+  --lift:#1d2025;
+  --ok:#34c76a;
+  --danger:#f0605d;
   color-scheme:dark;
 }
 
@@ -1111,7 +1111,7 @@ function applyThemeButton() {
   const b = document.getElementById('themeBtn');
   if (b) { b.innerHTML = `<svg class="ico"><use href="#${t === 'dark' ? 'i-sun' : 'i-moon'}"/></svg>`; b.title = t === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'; b.setAttribute('aria-label', b.title); }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', t === 'dark' ? '#000000' : '#ffffff');
+  if (meta) meta.setAttribute('content', t === 'dark' ? '#141619' : '#ffffff');
 }
 function toggleTheme() {
   const next = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
