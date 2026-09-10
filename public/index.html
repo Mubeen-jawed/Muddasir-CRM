@@ -608,6 +608,33 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .alert-item.cleared .alert-word{color:var(--dim)}
 .alert-empty{padding:18px 14px;font-size:12px;color:var(--faint);text-align:center}
 #alerts{display:none}
+
+/* ── Clickable cards ── */
+.geo-card.clickable,#summary .stat{cursor:pointer;transition:border-color 0.15s}
+.geo-card.clickable:hover,#summary .stat:hover{border-color:var(--accent)}
+.geo-card.clickable .btn,.geo-card.clickable .camp-link{cursor:pointer}
+.geo-card.clickable .campaigns-list{cursor:default}
+
+/* ── Breakdown page ── */
+.bd-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.bd-titles{flex:1;min-width:200px}
+.bd-titles h2{font-size:clamp(18px,2.2vw,24px);font-weight:700;letter-spacing:-0.4px;color:var(--text-strong);line-height:1.2}
+.bd-titles .sub{font-size:13px;color:var(--dim);margin-top:4px}
+.bd-head .seg{align-self:center}
+.chart canvas{height:220px}
+.bd-section{margin-top:22px}
+.bd-section h3{font-size:15px;font-weight:700;color:var(--text-strong);margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.bd-section h3 small{font-weight:400;font-size:11px;color:var(--faint)}
+.bd-text{margin-top:12px;font-size:13px;line-height:1.7;color:var(--text);max-width:900px}
+.bd-text p{margin-bottom:8px}
+.bd-text strong{font-weight:600;color:var(--text-strong)}
+.bd-table{width:100%;border-collapse:collapse;font-size:12px}
+.bd-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--faint);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.bd-table td{padding:7px 8px;border-bottom:1px solid var(--line-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bd-table td.name{white-space:normal;min-width:180px}
+.bd-table th.num,.bd-table td.num{text-align:right}
+.bd-table tr.camp-link:hover td{background:var(--hover)}
+.bd-wrap{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -674,30 +701,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     </div>
   </div>
 </aside>
-
-<div class="modal-scrim" id="campModal" role="dialog" aria-modal="true" aria-labelledby="campTitle">
-  <div class="modal modal-camp">
-    <div class="modal-head">
-      <h2 id="campTitle">Campaign</h2>
-      <div class="sub" id="campSub"></div>
-      <button class="modal-x" id="campClose" type="button" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
-    </div>
-    <div class="modal-body">
-      <div class="camp-strip" id="campStrip"></div>
-      <div class="camp-controls">
-        <div class="seg" id="campRange"><button type="button" data-days="mtd" class="active">This month</button><button type="button" data-days="30">30 days</button><button type="button" data-days="90">90 days</button></div>
-        <span class="camp-note" id="campNote"></span>
-      </div>
-      <div class="charts" id="campCharts">
-        <figure class="chart"><figcaption>Spend per day<small id="capSpend"></small></figcaption><canvas id="chSpend" height="180"></canvas></figure>
-        <figure class="chart"><figcaption>Budget pace<small id="capBudget"></small></figcaption><canvas id="chBudget" height="180"></canvas></figure>
-        <figure class="chart"><figcaption>Leads per day<small id="capLeads"></small></figcaption><canvas id="chLeads" height="180"></canvas></figure>
-        <figure class="chart"><figcaption>Click-through rate<small id="capCtr"></small></figcaption><canvas id="chCtr" height="180"></canvas></figure>
-      </div>
-      <div class="modal-err" id="campErr"></div>
-    </div>
-  </div>
-</div>
 
 <div class="modal-scrim" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
   <div class="modal modal-settings">
@@ -838,6 +841,33 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     Hover any metric (the small <strong>?</strong> icon) to see exactly what it means.
   </div>
   </div><!-- /budgetView -->
+
+<div id="breakdownView" style="display:none">
+    <div class="bd-head">
+      <button class="btn btn-ico" id="bdBack" type="button" title="Back to dashboard" aria-label="Back to dashboard"><svg class="ico"><use href="#i-arrow-left"/></svg></button>
+      <div class="bd-titles">
+        <h2 id="campTitle">Breakdown</h2>
+        <div class="sub" id="campSub"></div>
+      </div>
+      <div class="seg" id="campRange"><button type="button" data-days="mtd" class="active">This month</button><button type="button" data-days="30">30 days</button><button type="button" data-days="90">90 days</button></div>
+    </div>
+    <div class="modal-err" id="campErr"></div>
+    <div class="charts" id="campCharts">
+      <figure class="chart"><figcaption>Spend per day<small id="capSpend"></small></figcaption><canvas id="chSpend" height="220"></canvas></figure>
+      <figure class="chart"><figcaption>Budget pace<small id="capBudget"></small></figcaption><canvas id="chBudget" height="220"></canvas></figure>
+      <figure class="chart"><figcaption>Leads per day<small id="capLeads"></small></figcaption><canvas id="chLeads" height="220"></canvas></figure>
+      <figure class="chart"><figcaption>Click-through rate<small id="capCtr"></small></figcaption><canvas id="chCtr" height="220"></canvas></figure>
+    </div>
+    <section class="bd-section">
+      <h3>Breakdown <small id="campNote"></small></h3>
+      <div class="camp-strip" id="campStrip"></div>
+      <div class="bd-text" id="bdText"></div>
+    </section>
+    <section class="bd-section" id="bdListSection">
+      <h3 id="bdListTitle">Campaigns</h3>
+      <div id="bdList"></div>
+    </section>
+  </div>
 
   <div id="creativeView" style="display:none">
 <div id="cr_dashboard" class="cr-dashboard">
@@ -1086,7 +1116,7 @@ function toggleTheme() {
   applyThemeButton();
 
   if (window.Creative && window.Creative.refresh) window.Creative.refresh();
-  if (typeof campData !== 'undefined' && campData && campModal.classList.contains('open')) drawCampaignCharts(campRangeDays());
+  if (typeof campData !== 'undefined' && campData && breakdownView.style.display !== 'none') drawCampaignCharts(campRangeDays());
 }
 applyThemeButton();
 // ── Sidebar rail ──
@@ -1203,6 +1233,7 @@ async function switchWorkspace(id) {
   renderSkeleton();
   await loadData();
   await syncViewTabs();
+  if (location.hash.startsWith('#breakdown')) openBreakdownFromHash();
 }
 
 // ── Views: Budget pacing vs Creative performance ──
@@ -1211,19 +1242,20 @@ async function switchWorkspace(id) {
 let currentView = localStorage.getItem('view') || 'budget';
 
 function showView(view) {
-  currentView = view;
-  localStorage.setItem('view', view);
+  const isBreakdown = view === 'breakdown';
+  if (!isBreakdown) { currentView = view; localStorage.setItem('view', view); }
   document.querySelectorAll('#viewTabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('budgetView').style.display = view === 'budget' ? '' : 'none';
   document.getElementById('creativeView').style.display = view === 'creative' ? '' : 'none';
+  document.getElementById('breakdownView').style.display = isBreakdown ? '' : 'none';
   const h1 = document.querySelector('.header h1');
-  if (h1) h1.textContent = view === 'creative' ? 'Creative performance' : 'Budget pacing';
+  if (h1) h1.textContent = isBreakdown ? 'Breakdown' : view === 'creative' ? 'Creative performance' : 'Budget pacing';
   const bar = document.querySelector('.topbar-title');
   if (bar) bar.textContent = h1 ? h1.textContent : '';
   const badge = document.getElementById('liveBadge');
-  if (badge) badge.style.display = view === 'creative' ? 'none' : '';
+  if (badge) badge.style.display = view === 'budget' ? '' : 'none';
   const month = document.getElementById('monthLabel');
-  if (month) month.style.display = view === 'creative' ? 'none' : '';
+  if (month) month.style.display = view === 'budget' ? '' : 'none';
   if (view === 'creative' && window.Creative) window.Creative.refresh();
 }
 
@@ -1237,7 +1269,7 @@ async function syncViewTabs() {
 
 document.addEventListener('click', (e) => {
   const b = e.target.closest && e.target.closest('#viewTabs button');
-  if (b) showView(b.dataset.view);
+  if (b) { if (location.hash.startsWith('#breakdown')) history.replaceState(null, '', location.pathname); showView(b.dataset.view); }
 });
 
 // Delegated so the rows survive every re-render without rebinding.
@@ -1709,25 +1741,48 @@ document.addEventListener('keydown', function (e) {
 
 
 // ── Campaign drill-down: four charts drawn in the text colour ──
-const campModal = document.getElementById('campModal');
+const breakdownView = document.getElementById('breakdownView');
 let campData = null;
+let breakdownHash = '';
 let campRangeKey = 'mtd';
 
-function openCampaign(campaignId, fallbackName) {
-  if (!campaignId) return;
-  document.getElementById('campTitle').textContent = fallbackName || 'Campaign';
+// The breakdown is a page of its own: #breakdown/campaign/<id>, #breakdown/geo/<id>, #breakdown/all.
+function openCampaign(campaignId, fallbackName) { if (campaignId) location.hash = `#breakdown/campaign/${encodeURIComponent(campaignId)}`; }
+function openGeoBreakdown(geoId) { location.hash = `#breakdown/geo/${encodeURIComponent(geoId)}`; }
+function openWorkspaceBreakdown() { location.hash = '#breakdown/all'; }
+function closeCampaign() { if (location.hash.startsWith('#breakdown')) location.hash = ''; else showView(localStorage.getItem('view') || 'budget'); }
+
+function breakdownUrlFromHash(hash) {
+  const m = /^#breakdown\/(campaign|geo|all)(?:\/([^/]+))?$/.exec(hash || '');
+  if (!m) return null;
+  const ws = encodeURIComponent(currentWorkspace || '');
+  if (m[1] === 'campaign') return `${API_BASE}/api/campaign/${m[2]}?days=90&workspace=${ws}`;
+  if (m[1] === 'geo') return `${API_BASE}/api/breakdown?geo=${m[2]}&days=90`;
+  return `${API_BASE}/api/breakdown?workspace=${ws}&days=90`;
+}
+function openBreakdownFromHash() {
+  const url = breakdownUrlFromHash(location.hash);
+  if (!url) { if (breakdownView.style.display !== 'none') showView(localStorage.getItem('view') || 'budget'); return; }
+  if (location.hash === breakdownHash && campData) { showView('breakdown'); return; }
+  breakdownHash = location.hash;
+  campData = null;
+  document.getElementById('campTitle').textContent = 'Breakdown';
   document.getElementById('campSub').textContent = 'Loading…';
   document.getElementById('campStrip').innerHTML = '';
+  document.getElementById('bdText').innerHTML = '';
+  document.getElementById('bdList').innerHTML = '';
   document.getElementById('campErr').classList.remove('show');
-  campModal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  loadCampaign(campaignId);
+  ['chSpend', 'chBudget', 'chLeads', 'chCtr'].forEach((id) => { const c = document.getElementById(id); c.getContext('2d').clearRect(0, 0, c.width, c.height); });
+  showView('breakdown');
+  window.scrollTo({ top: 0 });
+  loadCampaign(url);
 }
-function closeCampaign() { campModal.classList.remove('open'); document.body.style.overflow = ''; }
+window.addEventListener('hashchange', openBreakdownFromHash);
+document.getElementById('bdBack').addEventListener('click', closeCampaign);
 
-async function loadCampaign(id) {
+async function loadCampaign(url) {
   try {
-    const res = await fetch(`${API_BASE}/api/campaign/${encodeURIComponent(id)}?days=90&workspace=${encodeURIComponent(currentWorkspace || '')}`, { credentials: 'same-origin' });
+    const res = await fetch(url, { credentials: 'same-origin' });
     if (res.status === 401) { toLogin(); return; }
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
@@ -1748,8 +1803,12 @@ function campRangeDays() {
 function renderCampaign() {
   const c = campData.campaign;
   document.getElementById('campTitle').textContent = c.name || 'Campaign';
-  const budgetTxt = c.dailyBudget ? `${fmt(c.dailyBudget)}/day budget` : c.lifetimeBudget ? `${fmt(c.lifetimeBudget)} lifetime budget` : 'budget set at ad-set level';
-  document.getElementById('campSub').textContent = `${campData.geo.name} · ${campData.account} · ${(c.status || '').replace(/_/g, ' ').toLowerCase()} · ${budgetTxt}`;
+  const isCampaign = !campData.kind || campData.kind === 'campaign';
+  const budgetTxt = !isCampaign ? `${fmt(c.monthlyBudget)} monthly budget · ideal ${fmt(c.dailyBudget)}/day`
+    : c.dailyBudget ? `${fmt(c.dailyBudget)}/day budget` : c.lifetimeBudget ? `${fmt(c.lifetimeBudget)} lifetime budget` : 'budget set at ad-set level';
+  document.getElementById('campSub').textContent = isCampaign
+    ? `${campData.geo.name} · ${campData.account} · ${(c.status || '').replace(/_/g, ' ').toLowerCase()} · ${budgetTxt}`
+    : `${campData.account} · ${budgetTxt}`;
   const days = campRangeDays();
   const sum = (k) => days.reduce((a, d) => a + (d[k] || 0), 0);
   const spend = sum('spend'), leads = sum('leads'), clicks = sum('clicks'), imps = sum('impressions');
@@ -1761,6 +1820,53 @@ function renderCampaign() {
   document.getElementById('campNote').textContent = days.length ? `${days[0].date} → ${days[days.length - 1].date}` : 'No delivery in this range';
   document.querySelectorAll('#campRange button').forEach((b) => b.classList.toggle('active', b.dataset.days === campRangeKey));
   drawCampaignCharts(days);
+  renderBreakdownText(days, { spend, leads, clicks, imps });
+  renderBreakdownList(days);
+}
+
+// Plain-language reading of the numbers, written under the charts.
+function renderBreakdownText(days, t) {
+  const el = document.getElementById('bdText');
+  if (!days.length) { el.innerHTML = '<p>No delivery in this range.</p>'; return; }
+  const c = campData.campaign, isCampaign = !campData.kind || campData.kind === 'campaign';
+  const n = days.length, active = days.filter((d) => d.spend > 0).length;
+  const cpl = t.leads > 0 ? t.spend / t.leads : null, ctr = t.imps > 0 ? t.clicks / t.imps * 100 : 0, c2l = t.clicks > 0 ? t.leads / t.clicks * 100 : 0;
+  const paras = [];
+  const budgetRef = c.dailyBudget ? c.dailyBudget * n : null;
+  const paceLine = budgetRef ? (t.spend > budgetRef * 1.05 ? `<strong>${Math.round((t.spend / budgetRef - 1) * 100)}% ahead of the even pace</strong> (${fmt(budgetRef)} would have been spent by now at ${fmt(c.dailyBudget)} a day)` :
+    t.spend < budgetRef * 0.95 ? `<strong>${Math.round((1 - t.spend / budgetRef) * 100)}% behind the even pace</strong> (${fmt(budgetRef)} was the target by now at ${fmt(c.dailyBudget)} a day)` :
+    `<strong>on pace</strong> against ${fmt(c.dailyBudget)} a day`) : 'with no fixed daily budget to pace against';
+  paras.push(`<p><strong>Spend.</strong> ${fmt(t.spend)} over ${n} day${n === 1 ? '' : 's'} (${active} with delivery), averaging ${fmt(t.spend / Math.max(active, 1))} on days it ran — ${paceLine}.</p>`);
+  const best = days.filter((d) => d.leads > 0).sort((x, y) => x.cpl - y.cpl)[0], worst = days.filter((d) => d.leads > 0 && d.spend >= 50).sort((x, y) => y.cpl - x.cpl)[0];
+  paras.push(`<p><strong>Leads.</strong> ${t.leads.toLocaleString()} lead${t.leads === 1 ? '' : 's'}${cpl ? ` at ${fmtDec(cpl)} each` : ''}, ${(t.leads / Math.max(active, 1)).toFixed(1)} per active day${best ? `. Cheapest day was ${best.date} at ${fmtDec(best.cpl)}` : ''}${worst && worst !== best ? `; the most expensive was ${worst.date} at ${fmtDec(worst.cpl)}` : ''}.</p>`);
+  const half = Math.floor(n / 2); const first = days.slice(0, half), second = days.slice(half);
+  const ctrOf = (arr) => { const i = arr.reduce((a, d) => a + d.impressions, 0), k = arr.reduce((a, d) => a + d.clicks, 0); return i > 0 ? k / i * 100 : 0; };
+  const trend = half > 1 ? (ctrOf(second) > ctrOf(first) * 1.1 ? 'rising' : ctrOf(second) < ctrOf(first) * 0.9 ? 'falling' : 'steady') : 'steady';
+  paras.push(`<p><strong>Click-through.</strong> ${ctr.toFixed(2)}% across ${t.imps.toLocaleString()} impressions, ${trend} through the period${half > 1 ? ` (${ctrOf(first).toFixed(2)}% in the first half, ${ctrOf(second).toFixed(2)}% in the second)` : ''}. ${ctr < 1 ? 'Below 1% points to a weak hook.' : ctr >= 2 ? 'Above 2% is strong creative.' : 'Middle of the road — worth a hook test.'} Click-to-lead is ${c2l.toFixed(1)}%${c2l && c2l < 3 ? ', so the landing page is the bigger lever' : c2l >= 10 ? ', a strong landing page' : ''}.</p>`);
+  if (!isCampaign && c.monthlyBudget) {
+    const mtd = campData.days.filter((d) => d.date >= campData.month.start).reduce((a, d) => a + d.spend, 0);
+    paras.push(`<p><strong>Month.</strong> ${fmt(mtd)} of the ${fmt(c.monthlyBudget)} monthly budget is spent (${Math.round(mtd / c.monthlyBudget * 100)}%).</p>`);
+  }
+  el.innerHTML = paras.join('');
+}
+
+// Under the text: campaigns for a county / all-counties view, or the day-by-day table for a campaign.
+function renderBreakdownList(days) {
+  const isCampaign = !campData.kind || campData.kind === 'campaign';
+  const title = document.getElementById('bdListTitle'), el = document.getElementById('bdList');
+  const th = (cols) => '<tr>' + cols.map((c, i) => `<th class="${i ? 'num' : ''}">${c}</th>`).join('') + '</tr>';
+  if (isCampaign) {
+    title.textContent = 'Day by day';
+    el.innerHTML = `<div class="bd-wrap"><table class="bd-table"><thead>${th(['Date', 'Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'Cost per lead'])}</thead><tbody>` +
+      [...days].reverse().map((d) => `<tr><td>${d.date}</td><td class="num">${fmt(d.spend)}</td><td class="num">${d.impressions.toLocaleString()}</td><td class="num">${d.clicks.toLocaleString()}</td><td class="num">${d.impressions ? d.ctr.toFixed(2) + '%' : '—'}</td><td class="num">${d.leads}</td><td class="num">${d.cpl != null ? fmtDec(d.cpl) : '—'}</td></tr>`).join('') + '</tbody></table></div>';
+    return;
+  }
+  title.textContent = 'Campaigns this month';
+  const geos = dashData ? dashData.geos.filter((g) => !campData.geo.id || g.id === campData.geo.id) : [];
+  const rows = geos.flatMap((g) => g.campaigns.map((c) => ({ ...c, geoName: g.name })));
+  el.innerHTML = rows.length ? `<div class="bd-wrap"><table class="bd-table"><thead>${th(['Campaign', 'Spend', 'Leads', 'Cost per lead', 'CTR', 'Click-to-lead', 'Freq.'])}</thead><tbody>` +
+    rows.map((c) => `<tr class="camp-link" data-campaign="${esc(c.campaignId || '')}" title="Open ${esc(c.name)}"><td class="name"><span class="camp-name">${esc(c.name)}</span>${geos.length > 1 ? `<br><small style="color:var(--faint)">${esc(c.geoName)}</small>` : ''}</td><td class="num">${fmt(c.spend)}</td><td class="num">${c.leads}</td><td class="num">${c.leads > 0 ? fmtDec(c.spend / c.leads) : '—'}</td><td class="num">${c.ctr > 0 ? c.ctr.toFixed(2) + '%' : '—'}</td><td class="num">${c.clickToLead > 0 ? c.clickToLead.toFixed(1) + '%' : '—'}</td><td class="num">${c.frequency > 0 ? c.frequency.toFixed(2) + 'x' : '—'}</td></tr>`).join('') + '</tbody></table></div>'
+    : '<div class="acct-empty">No campaigns with spend this month.</div>';
 }
 
 // Minimal canvas charting: bars, lines, dashed reference lines, all in theme colours.
@@ -1812,7 +1918,7 @@ function drawCampaignCharts(days) {
       axes(ch, days, max, money0); bars(ch, days, 'spend', max, ch.ink);
       if (c.dailyBudget) line(ch, days, () => c.dailyBudget, max, ch.soft, true, false);
     }
-    document.getElementById('capSpend').textContent = c.dailyBudget ? `dashed = ${fmt(c.dailyBudget)} daily budget` : 'total ' + fmt(days.reduce((a, d) => a + d.spend, 0));
+    document.getElementById('capSpend').textContent = c.dailyBudget ? `dashed = ${fmt(c.dailyBudget)} ${campData.kind && campData.kind !== 'campaign' ? 'ideal daily' : 'daily budget'}` : 'total ' + fmt(days.reduce((a, d) => a + d.spend, 0));
   }
   // 2. Budget pace — cumulative spend line against a straight even-pace line
   { const ch = chartCtx(document.getElementById('chBudget'));
@@ -1853,17 +1959,20 @@ function drawCampaignCharts(days) {
 }
 
 document.addEventListener('click', (e) => {
-  const row = e.target.closest && e.target.closest('.camp-link');
-  if (row) openCampaign(row.dataset.campaign, row.querySelector('.camp-name') && row.querySelector('.camp-name').textContent);
+  if (!e.target.closest) return;
+  const row = e.target.closest('.camp-link');
+  if (row) { openCampaign(row.dataset.campaign, row.querySelector('.camp-name') && row.querySelector('.camp-name').textContent); return; }
+  if (e.target.closest('button, input, a, .campaigns-list, .budget-edit')) return;
+  const card = e.target.closest('.geo-card[data-geo]');
+  if (card) { openGeoBreakdown(card.dataset.geo, card.dataset.name); return; }
+  const tile = e.target.closest('#summary .stat');
+  if (tile && dashData) openWorkspaceBreakdown();
 });
 document.addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('camp-link')) { e.preventDefault(); e.target.click(); }
-  if (e.key === 'Escape' && campModal.classList.contains('open')) closeCampaign();
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && (e.target.classList.contains('camp-link') || e.target.classList.contains('geo-card'))) { e.preventDefault(); e.target.click(); }
 });
-document.getElementById('campClose').addEventListener('click', closeCampaign);
-campModal.addEventListener('click', (e) => { if (e.target === campModal) closeCampaign(); });
 document.getElementById('campRange').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !campData) return; campRangeKey = b.dataset.days; renderCampaign(); });
-window.addEventListener('resize', () => { if (campData && campModal.classList.contains('open')) drawCampaignCharts(campRangeDays()); });
+window.addEventListener('resize', () => { if (campData && breakdownView.style.display !== 'none') drawCampaignCharts(campRangeDays()); });
 
 // ── Mobile drawer ──
 // Below 900px the sidebar is off-canvas; above it, it is always in view and
@@ -2208,7 +2317,7 @@ function renderGeoCard(g) {
   }
 
   return `
-    <div class="geo-card ${g.status === 'over_budget' ? 'over-budget' : ''}">
+    <div class="geo-card clickable ${g.status === 'over_budget' ? 'over-budget' : ''}" data-geo="${esc(g.id)}" data-name="${esc(g.name)}" role="button" tabindex="0" title="Open breakdown with charts">
       <div class="geo-head">
         <div class="geo-name">
           ${g.name}

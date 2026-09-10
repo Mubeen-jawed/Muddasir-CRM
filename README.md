@@ -886,15 +886,22 @@ Behind Nginx the `/api/events` location must be proxied unbuffered — see `ngin
 
 ---
 
-## Campaign drill-down
+## Breakdown pages
 
-Every row in a county card's campaign breakdown opens a modal with the campaign's daily series
-(`GET /api/campaign/:id?days=90`, scoped to the login's workspaces and cached 15 minutes per campaign):
+County cards, the summary tiles and campaign rows all open a breakdown page (URL fragments
+`#breakdown/geo/<id>`, `#breakdown/all`, `#breakdown/campaign/<id>`, so the browser back button and links
+work). Charts first, then the written breakdown, then a table:
 
-- **Spend per day** — bars, with the campaign's daily budget as a dashed line when Meta has one.
-- **Budget pace** — cumulative spend against a straight even-pace line (to the daily budget × days when set).
+- **Spend per day** — bars, with the daily budget (campaign) or ideal daily spend (county) as a dashed line.
+- **Budget pace** — cumulative spend against a straight even-pace line.
 - **Leads per day** — bars, with cost per lead as dots on its own scale.
 - **Click-through rate** — line with dots, impressions as faint bars behind.
+- **Breakdown** — totals for the window plus a plain-language reading of spend pace, leads, click-through
+  trend and month-to-date budget.
+- **Table** — the county's (or all counties') campaigns this month, each clickable, or the day-by-day rows
+  for a campaign.
 
-Charts are drawn on canvas in the theme's text colour (black on light, white on dark) with no library.
-A This month / 30 days / 90 days switch changes the window; the strip above shows the totals for it.
+Data comes from `GET /api/campaign/:id` (one campaign) and `GET /api/breakdown?geo=|workspace=` (daily
+totals across the campaigns a county owns, using the same include/exclude rules as the cards), both scoped
+to the login's workspaces and cached 15 minutes. Charts are canvas in the theme's text colour, no library.
+A This month / 30 days / 90 days switch changes the window.

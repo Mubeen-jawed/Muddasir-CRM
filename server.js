@@ -1109,6 +1109,96 @@ app.get("/api/campaign/:id", async (req, res) => {
   }
 });
 
+// ── County / workspace breakdown: daily totals across the campaigns a geo owns ──
+// Same include/exclude rules as the budget cards, applied day by day.
+const breakdownCache = new Map();
+
+function campaignInRule(name, accConfig) {
+  const n = String(name || "").toUpperCase();
+  if (accConfig.excludeKeywords && accConfig.excludeKeywords.some((kw) => n.includes(kw.toUpperCase()))) return false;
+  if (accConfig.includeKeywords && !accConfig.includeKeywords.some((kw) => n.includes(kw.toUpperCase()))) return false;
+  return true;
+}
+
+async function fetchAccountDailyCampaigns(accountId, since, until) {
+  let url = `https://graph.facebook.com/${META_API_VERSION}/${accountId}/insights?` + new URLSearchParams({
+    time_range: JSON.stringify({ since, until }),
+    time_increment: "1",
+    level: "campaign",
+    fields: "campaign_id,campaign_name,date_start,spend,impressions,clicks,actions",
+    limit: "500",
+    access_token: META_ACCESS_TOKEN,
+  });
+  const rows = [];
+  while (url) {
+    const body = await metaGetJson(url);
+    if (Array.isArray(body.data)) rows.push(...body.data);
+    url = (body.paging && body.paging.next) || null;
+  }
+  return rows;
+}
+
+async function fetchGeoDaily(geos, since, until) {
+  const key = geos.map((g) => g.id).join("+") + ":" + since + ":" + until;
+  const hit = breakdownCache.get(key);
+  if (hit && Date.now() - hit.at < CAMPAIGN_CACHE_MS) return hit.data;
+
+  const accountIds = [...new Set(geos.flatMap((g) => g.accounts.map((a) => a.accountId)))];
+  const perAccount = await Promise.all(accountIds.map(async (id) => ({ id, rows: await fetchAccountDailyCampaigns(id, since, until) })));
+  const byDay = new Map();
+  perAccount.forEach(({ id, rows }) => {
+    rows.forEach((r) => {
+      const owned = geos.some((g) => g.accounts.some((a) => a.accountId === id && campaignInRule(r.campaign_name, a)));
+      if (!owned) return;
+      const d = byDay.get(r.date_start) || { date: r.date_start, spend: 0, impressions: 0, clicks: 0, leads: 0, reach: 0, frequency: 0 };
+      d.spend += parseFloat(r.spend || 0);
+      d.impressions += parseInt(r.impressions || 0, 10);
+      d.clicks += parseInt(r.clicks || 0, 10);
+      d.leads += leadsFromActions(r.actions);
+      byDay.set(r.date_start, d);
+    });
+  });
+  const days = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({
+    ...d, ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0, cpl: d.leads > 0 ? d.spend / d.leads : null,
+  }));
+  breakdownCache.set(key, { at: Date.now(), data: days });
+  return days;
+}
+
+// GET /api/breakdown?geo=<id>  |  ?workspace=<id> (every geo of that workspace)
+app.get("/api/breakdown", async (req, res) => {
+  let geos, title, wsId;
+  if (req.query.geo) {
+    const geo = getAllGeos().find((g) => g.id === String(req.query.geo));
+    if (!geo) return res.status(404).json({ error: "Unknown county" });
+    geos = [geo]; title = geo.name; wsId = geo.workspace;
+  } else {
+    wsId = String(req.query.workspace || DEFAULT_WORKSPACE);
+    if (!getWorkspace(wsId)) return res.status(404).json({ error: "Unknown workspace" });
+    geos = getGeos(wsId); title = (getWorkspace(wsId) || {}).name + " — all counties";
+  }
+  if (!canSeeWorkspace(req, wsId)) return res.status(403).json({ error: "Not your account" });
+  const daysBack = Math.min(90, Math.max(7, parseInt(req.query.days || "30", 10) || 30));
+  const until = new Date();
+  const since = new Date(until); since.setUTCDate(since.getUTCDate() - (daysBack - 1));
+  const iso = (d) => d.toISOString().slice(0, 10);
+  try {
+    const days = await fetchGeoDaily(geos, iso(since), iso(until));
+    const budget = geos.reduce((a, g) => a + getEffectiveBudget(g.id), 0);
+    const daysInMonth = getDaysInMonth();
+    res.json({
+      kind: req.query.geo ? "geo" : "workspace",
+      campaign: { id: null, name: title, status: "", dailyBudget: daysInMonth ? budget / daysInMonth : null, lifetimeBudget: null, monthlyBudget: budget },
+      days,
+      geo: { id: geos.length === 1 ? geos[0].id : null, name: title, budget, workspace: wsId },
+      account: geos.map((g) => g.accounts.map((a) => a.label).join(" + ")).filter((v, i, arr) => arr.indexOf(v) === i).join(", "),
+      month: { start: iso(new Date(Date.UTC(until.getUTCFullYear(), until.getUTCMonth(), 1))), daysInMonth },
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // GET /api/events — server-sent events: one line per completed update, plus a
 // heartbeat so proxies keep the connection open. Behind Nginx this needs
 // proxy_buffering off (see nginx.conf).
