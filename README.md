@@ -872,3 +872,15 @@ empty database the server backfills 180 days in the background; after that `CREA
 to). It is reached from the account panel at the bottom of the sidebar, which also holds Sign out. Clients
 see the same panel with Sign out only. Adding an ad account (which creates its client login) still lives in
 the sidebar under *Add ad account*.
+
+---
+
+## Live updates
+
+There is no refresh button. The server publishes a server-sent event on `/api/events` whenever a Meta fetch
+(`REFRESH_INTERVAL_MINUTES`, plus `POST /api/refresh`) or a creative sync completes, and every open page
+reloads its data on that signal; the live indicator shows "Updating…" for the moment it takes. A 5-minute
+poll remains as a fallback for proxies that drop long connections.
+
+Behind Nginx the `/api/events` location must be proxied unbuffered — see `nginx.conf` (`proxy_buffering off`,
+`proxy_read_timeout 1h`).

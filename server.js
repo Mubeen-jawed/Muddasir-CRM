@@ -22,6 +22,17 @@ const {
 const auth = require("./auth");
 const users = require("./users");
 const creative = require("./creative/router");
+const { EventEmitter } = require("events");
+
+// ── Update feed ──
+// Browsers subscribe to /api/events and reload the moment a Meta fetch or a
+// creative sync lands, so nobody presses a refresh button. Payloads carry no
+// data — the client re-reads its own scoped endpoints, so scoping is unchanged.
+const updates = new EventEmitter();
+updates.setMaxListeners(0);
+function announce(type) {
+  updates.emit("update", { type, at: new Date().toISOString() });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -468,6 +479,7 @@ async function refreshData() {
     cachedWeekData = weekApiResults ? categorizeCampaigns(weekApiResults) : null;
     lastFetchTime = new Date().toISOString();
     fetchError = null;
+    announce("data");
 
     console.log(`  Success! Geo totals:`);
     getAllGeos().forEach((g) => {
@@ -1001,8 +1013,28 @@ const creativeRouter = creative.createCreativeRouter({
   getWorkspace,
   visibleWorkspaces,
   DEFAULT_WORKSPACE,
+  onSynced: () => announce("creative"),
 });
 app.use("/api/creative", creativeRouter);
+
+// GET /api/events — server-sent events: one line per completed update, plus a
+// heartbeat so proxies keep the connection open. Behind Nginx this needs
+// proxy_buffering off (see nginx.conf).
+app.get("/api/events", (req, res) => {
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+  res.write(`retry: 5000\n\n`);
+  res.write(`event: hello\ndata: ${JSON.stringify({ lastFetched: lastFetchTime || null })}\n\n`);
+  const send = (u) => res.write(`event: update\ndata: ${JSON.stringify(u)}\n\n`);
+  updates.on("update", send);
+  const beat = setInterval(() => res.write(`: ping\n\n`), 25000);
+  req.on("close", () => { clearInterval(beat); updates.off("update", send); });
+});
 
 // GET /api/workspaces — sidebar rows, with a live spend total per workspace.
 // A client gets only its own row(s); it never learns another client exists.

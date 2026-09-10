@@ -678,7 +678,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     </div>
     <div class="header-actions">
       <div class="header-buttons">
-        <button class="btn btn-ico" id="refreshBtn" type="button" onclick="doRefresh()" title="Refresh live data" aria-label="Refresh live data"><svg class="ico"><use href="#i-refresh"/></svg></button>
         <button class="btn btn-ico btn-theme" id="themeBtn" type="button" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
       </div>
       <div class="live-badge" id="liveBadge" data-state="live" title="">
@@ -1089,8 +1088,6 @@ function showView(view) {
   if (h1) h1.textContent = view === 'creative' ? 'Creative performance' : 'Budget pacing';
   const bar = document.querySelector('.topbar-title');
   if (bar) bar.textContent = h1 ? h1.textContent : '';
-  const refresh = document.getElementById('refreshBtn');
-  if (refresh) refresh.style.display = view === 'creative' ? 'none' : '';
   const badge = document.getElementById('liveBadge');
   if (badge) badge.style.display = view === 'creative' ? 'none' : '';
   const month = document.getElementById('monthLabel');
@@ -1384,23 +1381,34 @@ async function fetchDashboard() {
   return res.json();
 }
 
-async function doRefresh() {
-  const btn = document.getElementById('refreshBtn');
-  btn.disabled = true;
-  btn.innerHTML = SPINNER_HTML;
-  setLiveState('loading', 'Fetching…');
-  try {
-    await fetch(`${API_BASE}/api/refresh`, { method: 'POST', credentials: 'same-origin' });
-    await loadData();
-    // updateLiveBadge() leaves a 'loading' badge alone, so clear it here or it stays on "Fetching…".
+// ── Live updates ──
+// The server pushes a line whenever a Meta fetch or creative sync completes;
+// the page re-reads its data then. EventSource reconnects on its own. The
+// interval below is only a safety net for proxies that drop long connections.
+let eventsSource = null;
+let reloadTimer = null;
+function scheduleReload(kind) {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(async () => {
+    if (kind === 'creative') {
+      if (window.Creative && window.Creative.isEnabled()) window.Creative.refresh();
+      return;
+    }
+    setLiveState('loading', 'Updating…');
+    try { await loadData(); } catch (e) { console.error(e); }
     setLiveState('live', 'Live');
     updateLiveBadge();
-  } catch (e) {
-    console.error(e);
-    setLiveState('dead', 'Failed');
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<svg class="ico"><use href="#i-refresh"/></svg>';
+  }, 400);
+}
+function connectEvents() {
+  if (!('EventSource' in window) || eventsSource) return;
+  eventsSource = new EventSource(`${API_BASE}/api/events`, { withCredentials: true });
+  eventsSource.addEventListener('update', (e) => {
+    let u = {};
+    try { u = JSON.parse(e.data); } catch (err) { /* ignore malformed */ }
+    scheduleReload(u.type === 'creative' ? 'creative' : 'data');
+  });
+  eventsSource.onerror = () => { /* auto-reconnect; the polling fallback covers the gap */ };
 }
 
 function relativeTime(ts) {
@@ -1777,7 +1785,8 @@ async function init() {
   }
   await syncViewTabs();
 
-  // Auto-refresh dashboard data every 5 minutes on the frontend
+  // Push updates from the server, with a 5-minute poll as a fallback
+  connectEvents();
   setInterval(loadData, 5 * 60 * 1000);
   // Tick the "X minutes ago" indicator every 30 seconds so it stays honest between refreshes
   setInterval(updateLiveBadge, 30 * 1000);

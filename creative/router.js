@@ -19,7 +19,7 @@ const { syncAll } = require('./sync');
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
-function createCreativeRouter({ canSeeWorkspace, isAdmin, getWorkspace, visibleWorkspaces, DEFAULT_WORKSPACE }) {
+function createCreativeRouter({ canSeeWorkspace, isAdmin, getWorkspace, visibleWorkspaces, DEFAULT_WORKSPACE, onSynced }) {
   const r = express.Router();
   const syncState = { running: false, last: null };
 
@@ -201,7 +201,7 @@ function createCreativeRouter({ canSeeWorkspace, isAdmin, getWorkspace, visibleW
   async function runSync(opts) {
     if (syncState.running) return syncState.last;
     syncState.running = true;
-    try { syncState.last = await syncAll(opts); }
+    try { syncState.last = await syncAll(opts); if (onSynced) onSynced(syncState.last); }
     catch (err) { syncState.last = { status: 'error', errors: [err.message] }; console.error(`[CREATIVE] sync failed: ${err.message}`); }
     finally { syncState.running = false; }
     return syncState.last;
