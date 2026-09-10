@@ -20,14 +20,29 @@ const CONFIG_PATH = process.env.CREATIVE_CONFIG_PATH || path.join(__dirname, 'co
 let cache = null;
 let mtime = 0;
 
+// A missing or broken file must never take the whole dashboard down: the
+// creative tab simply stays off for every workspace until it is fixed.
+const EMPTY = { clients: {}, accounts: [], video_benchmark: null };
+let warned = false;
+
 function loadConfig() {
-  const stat = fs.statSync(CONFIG_PATH);
+  let stat;
+  try { stat = fs.statSync(CONFIG_PATH); }
+  catch (err) {
+    if (!warned) { console.error(`[CREATIVE] config not found at ${CONFIG_PATH} — creative tab disabled (${err.message})`); warned = true; }
+    return EMPTY;
+  }
   if (!cache || stat.mtimeMs !== mtime) {
-    cache = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    mtime = stat.mtimeMs;
-    for (const a of cache.accounts) {
-      if (!cache.clients[a.client]) throw new Error(`[CREATIVE] account ${a.id} references unknown client "${a.client}"`);
-      if (!a.workspace) throw new Error(`[CREATIVE] account ${a.id} has no workspace`);
+    try {
+      const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+      for (const a of parsed.accounts || []) {
+        if (!parsed.clients[a.client]) throw new Error(`account ${a.id} references unknown client "${a.client}"`);
+        if (!a.workspace) throw new Error(`account ${a.id} has no workspace`);
+      }
+      cache = parsed; mtime = stat.mtimeMs;
+    } catch (err) {
+      console.error(`[CREATIVE] config unreadable — creative tab disabled: ${err.message}`);
+      return cache || EMPTY;
     }
   }
   return cache;

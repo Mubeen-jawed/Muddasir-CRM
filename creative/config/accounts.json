@@ -1,0 +1,47 @@
+{
+  "clients": {
+    "ben-adu": {
+      "name": "Ben ADU",
+      "short": "ADU",
+      "cpl_target": 25,
+      "min_spend_for_verdict": 150
+    },
+    "ben-outdoor": {
+      "name": "Ben Outdoor",
+      "short": "Outdoor",
+      "cpl_target": 40,
+      "min_spend_for_verdict": 150
+    }
+  },
+  "accounts": [
+    {
+      "id": "act_598233003217290",
+      "name": "FL (ADU California)",
+      "client": "ben-adu",
+      "active": true,
+      "workspace": "ben-adu"
+    },
+    {
+      "id": "act_1423425976190315",
+      "name": "Pacific",
+      "client": "ben-adu",
+      "active": true,
+      "workspace": "ben-adu"
+    },
+    {
+      "id": "act_1281838446384778",
+      "name": "Green V2 (Outdoor)",
+      "client": "ben-outdoor",
+      "active": true,
+      "workspace": "ben-adu"
+    }
+  ],
+  "video_benchmark": {
+    "hook_good": 30,
+    "hook_near": 25,
+    "hold_good": 30,
+    "hold_near": 25,
+    "_note": "Hook rate = 25%-watched views / impressions (Meta's API no longer returns 3-second plays). Hold rate = ThruPlay / 25%-watched views. >= good is green, >= near is amber, below is red."
+  },
+  "_readme": "Accounts the creative tracker follows. workspace = CRM sidebar row (config.js SEED_WORKSPACES). client = sub-group with its own CPL target. County rules come from config.js, not here."
+}

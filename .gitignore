@@ -22,6 +22,8 @@ budgets.json
 
 # runtime account list added from the dashboard UI (server copy is authoritative)
 accounts.json
+# ...but the creative tracker's account config IS source and must ship
+!creative/config/accounts.json
 
 # per-client dashboard logins written by the server (hashes; server copy is authoritative)
 users.json
