@@ -36,6 +36,7 @@
   --on-accent:#ffffff;
   --input-bg:#ffffff;
   --scrim:rgba(11,18,32,0.55);
+  --lift:#f3f5f8;
   --ok:#15803d;
   --danger:#dc2626;
   --warn:var(--danger);
@@ -77,6 +78,7 @@
   --on-accent:#ffffff;
   --input-bg:#0a0a0a;
   --scrim:rgba(0,0,0,0.72);
+  --lift:#161819;
   --ok:#22c55e;
   --danger:#ef4444;
   color-scheme:dark;
@@ -115,14 +117,14 @@ img,svg{max-width:100%}
 .account-role{font-size:11px;color:var(--dim)}
 .account-actions{display:flex;flex-direction:column;gap:2px}
 .account-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-family:inherit;cursor:pointer;text-decoration:none;text-align:left}
-.account-btn:hover{color:var(--text);background:var(--hover)}
+.account-btn:hover{color:var(--text);background:var(--lift)}
 @media(min-width:901px){
   body.side-collapsed .account-who{justify-content:center;padding:4px 0 10px}
   body.side-collapsed .account-text,body.side-collapsed .account-btn .lbl{display:none}
   body.side-collapsed .account-btn{justify-content:center;padding:8px 0}
 }
 .ws-row{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;margin-bottom:4px;transition:background 0.15s,color 0.15s,border-color 0.15s}
-.ws-row:hover{background:var(--hover);color:var(--text)}
+.ws-row:hover{background:var(--lift);color:var(--text)}
 .ws-row.active{background:var(--accent-soft);border-color:var(--accent);color:var(--text-strong)}
 .ws-name{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ws-name > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -167,7 +169,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   border:1px dashed var(--line);background:transparent;color:var(--dim);
   font-size:12px;font-family:inherit;cursor:pointer;text-align:center;transition:all 0.15s;
 }
-.ws-add:hover{border-color:var(--accent);color:var(--accent);background:transparent}
+.ws-add:hover{color:var(--text);background:var(--lift)}
 .modal-scrim{
   position:fixed;inset:0;background:var(--scrim);z-index:200;
   display:none;align-items:center;justify-content:center;padding:20px;
@@ -316,7 +318,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .header-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:0}
 .header-buttons{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .btn{font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:background 0.15s;font-family:inherit}
-.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:hover:not(:disabled){background:var(--lift)}
 .btn:disabled{opacity:0.4;cursor:not-allowed}
 .btn-sm{font-size:11px;padding:3px 8px;border-radius:4px}
 .btn-save{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
@@ -495,7 +497,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .btn-ico{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text)}
 .btn-ico .ios-spinner{width:14px;height:14px}
 .side-toggle{margin-left:auto;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;padding:0}
-.side-toggle:hover{color:var(--text);border-color:var(--line)}
+.side-toggle:hover{color:var(--text);background:var(--lift)}
 .sidebar-title{display:flex;align-items:center;gap:6px}
 .ws-initial{display:none;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--text);margin:0 auto}
 .ws-row.active .ws-initial{border-color:var(--accent);color:var(--accent)}
@@ -559,7 +561,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── County card: two large figures, then plain facts ── */
 .hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
-.hero-tile{padding:12px 14px;background:var(--panel-alt);border-radius:4px;min-width:0;cursor:help}
+.hero-tile{padding:12px 14px;background:var(--panel-alt);border-radius:4px;min-width:0;cursor:pointer}
 .hero-label{font-size:11px;color:var(--dim);margin-bottom:3px}
 .hero-val{font-size:clamp(20px,2.2vw,28px);font-weight:700;letter-spacing:-0.4px;line-height:1.15;overflow-wrap:anywhere}
 .hero-sub{font-size:11px;color:var(--dim);margin-top:3px}
@@ -572,7 +574,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── Campaign drill-down ── */
 .camp-link{cursor:pointer}
-.camp-link:hover .camp-name,.camp-link:focus-visible .camp-name{color:var(--accent)}
+.camp-link:hover .camp-name,.camp-link:focus-visible .camp-name{color:var(--text-strong)}
 .modal-camp{max-width:900px}
 .camp-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0 18px;margin-bottom:12px}
 .camp-strip .fact{cursor:default}
@@ -610,8 +612,8 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 #alerts{display:none}
 
 /* ── Clickable cards ── */
-.geo-card.clickable,#summary .stat{cursor:pointer;transition:border-color 0.15s}
-.geo-card.clickable:hover,#summary .stat:hover{border-color:var(--accent)}
+.geo-card.clickable,#summary .stat{cursor:pointer;transition:background 0.15s}
+.geo-card.clickable:hover,#summary .stat:hover{background:var(--lift)}
 .geo-card.clickable .btn,.geo-card.clickable .camp-link{cursor:pointer}
 .geo-card.clickable .campaigns-list{cursor:default}
 
@@ -633,7 +635,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .bd-table td{padding:7px 8px;border-bottom:1px solid var(--line-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
 .bd-table td.name{white-space:normal;min-width:180px}
 .bd-table th.num,.bd-table td.num{text-align:right}
-.bd-table tr.camp-link:hover td{background:var(--hover)}
+.bd-table tr.camp-link:hover td{background:var(--lift)}
 .bd-wrap{overflow-x:auto}
 </style>
 </head>
@@ -814,12 +816,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
         </div>
         <button class="btn btn-ico btn-theme" id="themeBtn" type="button" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
       </div>
-      <div class="live-badge" id="liveBadge" data-state="live" title="">
-        <span class="live-dot"></span>
-        <span class="ios-spinner live-spin" aria-hidden="true"><i style="transform:rotate(0deg);animation-delay:-0.917s"></i><i style="transform:rotate(30deg);animation-delay:-0.833s"></i><i style="transform:rotate(60deg);animation-delay:-0.750s"></i><i style="transform:rotate(90deg);animation-delay:-0.667s"></i><i style="transform:rotate(120deg);animation-delay:-0.583s"></i><i style="transform:rotate(150deg);animation-delay:-0.500s"></i><i style="transform:rotate(180deg);animation-delay:-0.417s"></i><i style="transform:rotate(210deg);animation-delay:-0.333s"></i><i style="transform:rotate(240deg);animation-delay:-0.250s"></i><i style="transform:rotate(270deg);animation-delay:-0.167s"></i><i style="transform:rotate(300deg);animation-delay:-0.083s"></i><i style="transform:rotate(330deg);animation-delay:0.000s"></i></span>
-        <span class="live-label" id="liveLabel">Live</span>
-        <span class="live-time" id="liveTime"></span>
-      </div>
     </div>
   </div>
 
@@ -833,13 +829,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   <div class="summary" id="summary"></div>
   <div class="geo-grid" id="geoCards"></div>
 
-  <div class="footer">
-    <strong>How this dashboard works</strong><br>
-    Live spend numbers are pulled directly from Meta Ads every <span id="refreshInterval"></span> minutes — no manual updates needed.
-    Each ad campaign is automatically sorted into the right county based on its name.
-    <span id="footerBudgetNote">To change a county's monthly budget, click <em>Edit budget</em> — the new number is saved permanently and used for all future calculations.</span>
-    Hover any metric (the small <strong>?</strong> icon) to see exactly what it means.
-  </div>
   </div><!-- /budgetView -->
 
 <div id="breakdownView" style="display:none">
@@ -2422,7 +2411,6 @@ function render() {
   updateAlerts(alertItems);
   document.getElementById('summary').innerHTML = renderSummary(dashData.summary, dashData.geos);
   document.getElementById('geoCards').innerHTML = dashData.geos.map(renderGeoCard).join('');
-  document.getElementById('refreshInterval').textContent = dashData.meta.refreshIntervalMinutes;
 
   updateLiveBadge();
 
@@ -2448,8 +2436,6 @@ async function init() {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   renderSkeleton();
-  const budgetNote = document.getElementById('footerBudgetNote');
-  if (budgetNote && !isAdminUser()) budgetNote.style.display = 'none';
 
   const ws = await fetchWorkspaces();
   if (ws) {
