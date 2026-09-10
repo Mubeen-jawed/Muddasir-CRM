@@ -637,6 +637,12 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .bd-table th.num,.bd-table td.num{text-align:right}
 .bd-table tr.camp-link:hover td{background:var(--lift)}
 .bd-wrap{overflow-x:auto}
+
+/* ── Chart hover tooltip ── */
+.chart{position:relative}
+.chart canvas{cursor:crosshair;touch-action:pan-y}
+.chart-tip{position:absolute;top:34px;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:7px 10px;font-size:11px;line-height:1.5;color:var(--text);white-space:nowrap;z-index:5}
+.chart-tip b{display:block;font-weight:700;color:var(--text-strong);margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -1866,7 +1872,7 @@ function chartCtx(canvas) {
   const w = canvas.clientWidth || 420, h = 180;
   canvas.width = w * dpr; canvas.height = h * dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
-  return { ctx, w, h, ink: tone('--text-strong') || '#000', soft: tone('--dim') || '#888', faint: tone('--line') || '#ddd', pad: { l: 40, r: 10, t: 8, b: 22 } };
+  return { ctx, w, h, ink: tone('--text-strong') || '#000', soft: tone('--dim') || '#888', faint: tone('--line') || '#ddd', bg: tone('--panel') || '#fff', accent: tone('--accent') || '#1a56db', pad: { l: 40, r: 10, t: 8, b: 22 } };
 }
 function axes(c, days, maxY, fmtY) {
   const { ctx, w, h, pad, faint, soft } = c;
@@ -1898,54 +1904,118 @@ function empty(c, msg) { c.ctx.fillStyle = c.soft; c.ctx.font = '12px -apple-sys
 const money0 = (v) => '$' + Math.round(v).toLocaleString();
 const nice = (v) => { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; };
 
+// Each chart registers a draw(hoverIndex) and a tip(index) so pointer moves can
+// redraw with a guide line and show that day's numbers.
+const chartRegistry = {};
+
+function guide(c, i, n) {
+  const x = xAt(c, i, n);
+  c.ctx.strokeStyle = c.soft; c.ctx.lineWidth = 1; c.ctx.setLineDash([2, 3]);
+  c.ctx.beginPath(); c.ctx.moveTo(x, c.pad.t); c.ctx.lineTo(x, c.h - c.pad.b); c.ctx.stroke(); c.ctx.setLineDash([]);
+}
+function marker(c, x, y) {
+  c.ctx.fillStyle = c.ink; c.ctx.beginPath(); c.ctx.arc(x, y, 4, 0, Math.PI * 2); c.ctx.fill();
+  c.ctx.strokeStyle = c.bg; c.ctx.lineWidth = 1.5; c.ctx.stroke();
+}
+function barsHi(c, days, key, max, i) {
+  const n = days.length, slot = (c.w - c.pad.l - c.pad.r) / Math.max(n, 1), bw = Math.max(2, Math.min(18, slot * 0.6));
+  const v = days[i][key] || 0; if (v <= 0) return;
+  const x = xAt(c, i, n) - bw / 2, y = yAt(c, v, max);
+  c.ctx.fillStyle = c.accent; c.ctx.fillRect(x, y, bw, c.h - c.pad.b - y);
+}
+
 function drawCampaignCharts(days) {
   const c = campData.campaign;
-  // 1. Spend per day — bars, with the daily budget as a dashed reference line
-  { const ch = chartCtx(document.getElementById('chSpend'));
-    if (!days.length) empty(ch, 'No data'); else {
-      const max = nice(Math.max(...days.map((d) => d.spend), c.dailyBudget || 0) * 1.1);
-      axes(ch, days, max, money0); bars(ch, days, 'spend', max, ch.ink);
-      if (c.dailyBudget) line(ch, days, () => c.dailyBudget, max, ch.soft, true, false);
-    }
-    document.getElementById('capSpend').textContent = c.dailyBudget ? `dashed = ${fmt(c.dailyBudget)} ${campData.kind && campData.kind !== 'campaign' ? 'ideal daily' : 'daily budget'}` : 'total ' + fmt(days.reduce((a, d) => a + d.spend, 0));
-  }
-  // 2. Budget pace — cumulative spend line against a straight even-pace line
-  { const ch = chartCtx(document.getElementById('chBudget'));
-    if (!days.length) { empty(ch, 'No data'); document.getElementById('capBudget').textContent = ''; } else {
-      let run = 0; const cum = days.map((d) => (run += d.spend));
-      const target = c.dailyBudget ? c.dailyBudget * days.length : cum[cum.length - 1];
-      const max = nice(Math.max(cum[cum.length - 1], target) * 1.1);
-      axes(ch, days, max, money0);
-      line(ch, days, (d, i) => target * ((i + 1) / days.length), max, ch.soft, true, false);
-      line(ch, days, (d, i) => cum[i], max, ch.ink, false, false);
-      const last = cum[cum.length - 1];
-      document.getElementById('capBudget').textContent = c.dailyBudget ? `${fmt(last)} of ${fmt(target)} at ${fmt(c.dailyBudget)}/day` : `${fmt(last)} cumulative · dashed = even pace`;
-    }
-  }
-  // 3. Leads per day — bars, with cost per lead as a line on its own scale
-  { const ch = chartCtx(document.getElementById('chLeads'));
-    if (!days.length) empty(ch, 'No data'); else {
-      const max = nice(Math.max(...days.map((d) => d.leads), 1) * 1.15);
-      axes(ch, days, max, (v) => Math.round(v).toString()); bars(ch, days, 'leads', max, ch.ink);
-      const cpls = days.map((d) => d.cpl).filter((v) => v != null); const cplMax = cpls.length ? nice(Math.max(...cpls) * 1.1) : 0;
-      if (cplMax) line(ch, days, (d) => d.cpl == null ? null : d.cpl / cplMax * max, max, ch.soft, false, true);
-      const tl = days.reduce((a, d) => a + d.leads, 0), ts = days.reduce((a, d) => a + d.spend, 0);
-      document.getElementById('capLeads').textContent = `${tl} leads · dots = cost per lead (${tl ? fmtDec(ts / tl) : '—'} avg)`;
-    }
-  }
-  // 4. Click-through rate — line with dots, impressions as faint bars behind
-  { const ch = chartCtx(document.getElementById('chCtr'));
-    if (!days.length) empty(ch, 'No data'); else {
-      const max = nice(Math.max(...days.map((d) => d.ctr), 0.5) * 1.2);
-      const impMax = Math.max(...days.map((d) => d.impressions), 1);
-      axes(ch, days, max, (v) => v.toFixed(1) + '%');
-      bars(ch, days.map((d) => ({ v: d.impressions / impMax * max })), 'v', max, ch.faint);
-      line(ch, days, (d) => d.impressions > 0 ? d.ctr : null, max, ch.ink, false, true);
-      const clicks = days.reduce((a, d) => a + d.clicks, 0), imps = days.reduce((a, d) => a + d.impressions, 0);
-      document.getElementById('capCtr').textContent = `${imps > 0 ? (clicks / imps * 100).toFixed(2) : '—'}% overall · faint bars = impressions`;
-    }
-  }
+  const isCampaign = !campData.kind || campData.kind === 'campaign';
+  const budgetWord = isCampaign ? 'daily budget' : 'ideal daily';
+  const totalSpend = days.reduce((a, d) => a + d.spend, 0), totalLeads = days.reduce((a, d) => a + d.leads, 0);
+  const clicks = days.reduce((a, d) => a + d.clicks, 0), imps = days.reduce((a, d) => a + d.impressions, 0);
+  let run = 0; const cum = days.map((d) => (run += d.spend));
+  const target = c.dailyBudget ? c.dailyBudget * days.length : cum[cum.length - 1] || 0;
+  const cpls = days.map((d) => d.cpl).filter((v) => v != null); const cplMax = cpls.length ? nice(Math.max(...cpls) * 1.1) : 0;
+  const impMax = Math.max(...days.map((d) => d.impressions), 1);
+
+  chartRegistry.chSpend = { days, draw(hi) {
+    const ch = chartCtx(document.getElementById('chSpend'));
+    if (!days.length) return empty(ch, 'No data');
+    const max = nice(Math.max(...days.map((d) => d.spend), c.dailyBudget || 0) * 1.1);
+    axes(ch, days, max, money0); bars(ch, days, 'spend', max, ch.ink);
+    if (c.dailyBudget) line(ch, days, () => c.dailyBudget, max, ch.soft, true, false);
+    if (hi != null) { guide(ch, hi, days.length); barsHi(ch, days, 'spend', max, hi); }
+  }, tip(i) { const d = days[i]; return `<b>${d.date}</b>Spend ${fmt(d.spend)}${c.dailyBudget ? `<br>${budgetWord} ${fmt(c.dailyBudget)} · ${d.spend > c.dailyBudget ? '+' : ''}${Math.round((d.spend / c.dailyBudget - 1) * 100)}%` : ''}`; } };
+  document.getElementById('capSpend').textContent = c.dailyBudget ? `dashed = ${fmt(c.dailyBudget)} ${budgetWord}` : 'total ' + fmt(totalSpend);
+
+  chartRegistry.chBudget = { days, draw(hi) {
+    const ch = chartCtx(document.getElementById('chBudget'));
+    if (!days.length) return empty(ch, 'No data');
+    const max = nice(Math.max(cum[cum.length - 1], target) * 1.1);
+    axes(ch, days, max, money0);
+    line(ch, days, (d, i) => target * ((i + 1) / days.length), max, ch.soft, true, false);
+    line(ch, days, (d, i) => cum[i], max, ch.ink, false, false);
+    if (hi != null) { guide(ch, hi, days.length); marker(ch, xAt(ch, hi, days.length), yAt(ch, cum[hi], max)); }
+  }, tip(i) { const pace = target * ((i + 1) / days.length); return `<b>${days[i].date}</b>Cumulative ${fmt(cum[i])}<br>Even pace ${fmt(pace)} · ${cum[i] >= pace ? '+' : ''}${fmt(cum[i] - pace)}`; } };
+  document.getElementById('capBudget').textContent = days.length ? (c.dailyBudget ? `${fmt(cum[cum.length - 1])} of ${fmt(target)} at ${fmt(c.dailyBudget)}/day` : `${fmt(cum[cum.length - 1])} cumulative · dashed = even pace`) : '';
+
+  chartRegistry.chLeads = { days, draw(hi) {
+    const ch = chartCtx(document.getElementById('chLeads'));
+    if (!days.length) return empty(ch, 'No data');
+    const max = nice(Math.max(...days.map((d) => d.leads), 1) * 1.15);
+    axes(ch, days, max, (v) => Math.round(v).toString()); bars(ch, days, 'leads', max, ch.ink);
+    if (cplMax) line(ch, days, (d) => d.cpl == null ? null : d.cpl / cplMax * max, max, ch.soft, false, true);
+    if (hi != null) { guide(ch, hi, days.length); barsHi(ch, days, 'leads', max, hi); if (days[hi].cpl != null) marker(ch, xAt(ch, hi, days.length), yAt(ch, days[hi].cpl / cplMax * max, max)); }
+  }, tip(i) { const d = days[i]; return `<b>${d.date}</b>Leads ${d.leads}<br>Cost per lead ${d.cpl != null ? fmtDec(d.cpl) : '—'} · spend ${fmt(d.spend)}`; } };
+  document.getElementById('capLeads').textContent = `${totalLeads} leads · dots = cost per lead (${totalLeads ? fmtDec(totalSpend / totalLeads) : '—'} avg)`;
+
+  chartRegistry.chCtr = { days, draw(hi) {
+    const ch = chartCtx(document.getElementById('chCtr'));
+    if (!days.length) return empty(ch, 'No data');
+    const max = nice(Math.max(...days.map((d) => d.ctr), 0.5) * 1.2);
+    axes(ch, days, max, (v) => v.toFixed(1) + '%');
+    bars(ch, days.map((d) => ({ v: d.impressions / impMax * max })), 'v', max, ch.faint);
+    line(ch, days, (d) => d.impressions > 0 ? d.ctr : null, max, ch.ink, false, true);
+    if (hi != null) { guide(ch, hi, days.length); if (days[hi].impressions > 0) marker(ch, xAt(ch, hi, days.length), yAt(ch, days[hi].ctr, max)); }
+  }, tip(i) { const d = days[i]; return `<b>${d.date}</b>CTR ${d.impressions ? d.ctr.toFixed(2) + '%' : '—'}<br>${d.clicks.toLocaleString()} clicks / ${d.impressions.toLocaleString()} impressions`; } };
+  document.getElementById('capCtr').textContent = `${imps > 0 ? (clicks / imps * 100).toFixed(2) : '—'}% overall · faint bars = impressions`;
+
+  Object.values(chartRegistry).forEach((r) => r.draw(null));
 }
+
+// Pointer → nearest day; redraw with the guide and place the tooltip inside the figure.
+function chartHover(e) {
+  const canvas = e.target.closest && e.target.closest('canvas');
+  if (!canvas || !chartRegistry[canvas.id]) return;
+  const reg = chartRegistry[canvas.id];
+  if (!reg.days.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || canvas.clientWidth || 420;
+  const pad = { l: 40, r: 10 };
+  const inner = w - pad.l - pad.r, n = reg.days.length;
+  const rel = Math.min(Math.max(e.clientX - rect.left - pad.l, 0), inner);
+  const i = n <= 1 ? 0 : Math.round(rel / inner * (n - 1));
+  if (reg.hover === i) return;
+  reg.hover = i;
+  reg.draw(i);
+  const fig = canvas.closest('.chart');
+  let tip = fig.querySelector('.chart-tip');
+  if (!tip) { tip = document.createElement('div'); tip.className = 'chart-tip'; fig.appendChild(tip); }
+  tip.innerHTML = reg.tip(i);
+  const x = pad.l + (n <= 1 ? inner / 2 : inner * (i / (n - 1)));
+  const flip = x > w * 0.6;
+  tip.style.left = flip ? 'auto' : Math.round(x + 12) + 'px';
+  tip.style.right = flip ? Math.round(w - x + 12) + 'px' : 'auto';
+  tip.hidden = false;
+}
+function chartLeave(e) {
+  const canvas = e.target.closest && e.target.closest('canvas');
+  if (!canvas || !chartRegistry[canvas.id]) return;
+  const reg = chartRegistry[canvas.id];
+  reg.hover = null; reg.draw(null);
+  const tip = canvas.closest('.chart').querySelector('.chart-tip'); if (tip) tip.hidden = true;
+}
+document.getElementById('campCharts').addEventListener('pointermove', chartHover);
+document.getElementById('campCharts').addEventListener('pointerdown', chartHover);
+document.getElementById('campCharts').addEventListener('pointerleave', chartLeave, true);
+document.querySelectorAll('#campCharts canvas').forEach((cv) => cv.addEventListener('pointerleave', chartLeave));
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest) return;
