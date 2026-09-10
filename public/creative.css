@@ -2,7 +2,7 @@
 #cr_dashboard {
   --bg-base: var(--bg, #0a0a0f);
   --bg-surface: var(--panel, #12121a);
-  --bg-elevated: var(--panel-alt, #1a1a24);
+  --bg-elevated: var(--panel, #1a1a24);
   --bg-hover: var(--hover, #22222e);
   --bg-lift: var(--lift, #1f2128);
   --border: var(--line, #2a2a36);

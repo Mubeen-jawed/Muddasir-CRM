@@ -21,7 +21,7 @@
 :root{
   --bg:#ffffff;
   --panel:#ffffff;
-  --panel-alt:#f6f7f9;
+  --panel-alt:#ffffff;
   --hover:rgba(26,86,219,0.06);
   --line:#dfe3e8;
   --line-soft:#e8ebef;
@@ -62,8 +62,8 @@
 }
 :root[data-theme="dark"]{
   --bg:#000000;
-  --panel:#0a0a0a;
-  --panel-alt:#050505;
+  --panel:#000000;
+  --panel-alt:#000000;
   --hover:rgba(59,130,246,0.12);
   --line:#1f2733;
   --line-soft:#161c25;
@@ -76,7 +76,7 @@
   --accent-strong:#7fb0ff;
   --accent-soft:rgba(59,130,246,0.16);
   --on-accent:#ffffff;
-  --input-bg:#0a0a0a;
+  --input-bg:#000000;
   --scrim:rgba(0,0,0,0.72);
   --lift:#161819;
   --ok:#22c55e;
@@ -378,7 +378,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── Metric grid ── */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:10px;margin-top:14px}
-.metric{padding:12px 14px;border-radius:4px;background:var(--panel-alt);border:1px solid var(--line-soft);cursor:help;min-width:0}
+.metric{padding:12px 14px;border-radius:4px;background:var(--bg);border:1px solid var(--line-soft);cursor:help;min-width:0}
 .metric-label{font-size:11px;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
 .metric-label .info{display:inline-block;font-size:10px;font-weight:700;color:var(--faint);flex-shrink:0}
 .metric:hover .metric-label .info{color:var(--muted);border-color:var(--faint)}
@@ -561,7 +561,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── County card: two large figures, then plain facts ── */
 .hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
-.hero-tile{padding:12px 14px;background:var(--panel-alt);border-radius:4px;min-width:0;cursor:pointer}
+.hero-tile{padding:12px 14px;background:var(--bg);border:1px solid var(--line-soft);border-radius:4px;min-width:0;cursor:pointer}
 .hero-label{font-size:11px;color:var(--dim);margin-bottom:3px}
 .hero-val{font-size:clamp(20px,2.2vw,28px);font-weight:700;letter-spacing:-0.4px;line-height:1.15;overflow-wrap:anywhere}
 .hero-sub{font-size:11px;color:var(--dim);margin-top:3px}
