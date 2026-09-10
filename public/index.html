@@ -2530,6 +2530,18 @@ function render() {
 
   document.getElementById('monthLabel').textContent =
     `${dashData.meta.workspaceName || 'Ben ADU'} — ${dashData.meta.month}`;
+  // Cards rank by how much attention they need: over budget, then overshooting,
+  // then under-spending, then on pace — and within a tier, the biggest miss first.
+  const rank = { over_budget: 0, at_risk: 1, under_pacing: 2, on_track: 3 };
+  const miss = (g) => g.budget > 0 ? Math.abs(g.projectedEOM / g.budget - 1) : 0;
+  const ordered = [...dashData.geos].sort((a, b) => {
+    const spentOverA = a.spent > a.budget ? 0 : 1, spentOverB = b.spent > b.budget ? 0 : 1;
+    if (spentOverA !== spentOverB) return spentOverA - spentOverB;
+    const ra = rank[a.status] ?? 9, rb = rank[b.status] ?? 9;
+    if (ra !== rb) return ra - rb;
+    return miss(b) - miss(a) || b.spent - a.spent;
+  });
+  dashData.geos = ordered;
   const alertItems = renderAlerts(dashData.geos);
   if (dashData.meta.error) alertItems.unshift({ key: 'fetch-error', level: 'info', label: 'Fetch error', text: dashData.meta.error });
   updateAlerts(alertItems);
