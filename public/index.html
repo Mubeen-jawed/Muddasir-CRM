@@ -661,6 +661,14 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .account-menu{margin-bottom:6px;padding:4px;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
 .account-menu[hidden]{display:none}
 .account-actions{display:contents}
+
+/* ── Summary tiles: hairline between the top numbers ── */
+.summary{gap:0}
+.summary .stat{border-radius:0;padding:14px 22px}
+.summary .stat + .stat{border-left:1px solid var(--line)}
+.summary .stat:first-child{padding-left:0}
+@media(max-width:1023px){.summary .stat:nth-child(3){border-left:none;padding-left:0}.summary .stat{border-top:1px solid var(--line)}.summary .stat:nth-child(-n+2){border-top:none}}
+@media(max-width:600px){.summary .stat + .stat{border-left:none;border-top:1px solid var(--line);padding-left:0}.summary .stat:nth-child(2){border-top:1px solid var(--line)}}
 </style>
 </head>
 <body>
