@@ -326,8 +326,18 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
 
   // ── Drawer ──
   async function openDrawer(adId) {
+    // Open at once with a skeleton; the ad's numbers and chart fill in when the fetch lands.
+    $('#cr_drawerTitle').textContent = ''; $('#cr_drawerAccount').textContent = ''; $('#cr_drawerMeta').textContent = '';
+    $('#cr_drawerThumb').innerHTML = skLine('100%', 140);
+    $('#cr_drawerKpis').innerHTML = Array.from({ length: 9 }, () => `<div><div class="kpi-label">${skLine('60%', 8)}</div><div class="kpi-value">${skLine('70%', 16)}</div></div>`).join('');
+    $('#cr_drawerCopy').innerHTML = skLine('90%', 12) + skLine('75%', 12);
+    const cv = $('#cr_drawerChart'); const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height);
+    let chartSk = $('#drawerChartSkel'); if (!chartSk) { chartSk = document.createElement('div'); chartSk.id = 'drawerChartSkel'; chartSk.className = 'chart-skel drawer-skel'; cv.parentNode.insertBefore(chartSk, cv.nextSibling); }
+    chartSk.innerHTML = Array.from({ length: 14 }, (_, i) => `<span class="sk" style="height:${30 + ((i * 37) % 60)}%"></span>`).join(''); chartSk.hidden = false;
+    $('#cr_drawer').classList.remove('hidden');
     let d;
-    try { d = await api(`/api/ad/${adId}?days=${state.days}`); } catch (e) { toast(e.message); return; }
+    try { d = await api(`/api/ad/${adId}?days=${state.days}`); } catch (e) { toast(e.message); chartSk.hidden = true; return; }
+    chartSk.hidden = true;
     state.drawerAd = d.ad;
     const a = d.ad, t = d.total, target = state.data.client.cpl_target;
     const accName = (state.config.accounts.find(x => x.id === a.account_id) || {}).name || a.account_id;

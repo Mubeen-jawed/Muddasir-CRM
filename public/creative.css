@@ -202,6 +202,9 @@
 #cr_dashboard .grid td .sk { margin: 4px 0; }
 @media (prefers-reduced-motion: reduce) {#cr_dashboard .ios-spinner i, #cr_dashboard .sk { animation: none; }
  }
+#cr_dashboard .drawer-body { position: relative; }
+#cr_dashboard .chart-skel.drawer-skel { position: absolute; left: 32px; right: 32px; height: 110px; margin-top: -132px; display: flex; align-items: flex-end; gap: 5px; pointer-events: none; }
+#cr_dashboard .chart-skel.drawer-skel .sk { flex: 1; border-radius: 2px; }
 #cr_dashboard .auth-btn { background: var(--accent); color: #0a0a0f; border: none; border-radius: var(--radius-sm); padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
 #cr_dashboard .auth-btn:hover { background: var(--accent-hover); }
 #cr_dashboard .auth-btn.small { padding: 8px 14px; font-size: 13px; }
