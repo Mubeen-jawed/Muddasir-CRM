@@ -600,11 +600,43 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
       </div>
     </div>
     <div class="account-actions">
-      <a class="account-btn" id="settingsBtn" href="/settings" title="Settings"><svg class="ico"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+      <button class="account-btn" id="settingsBtn" type="button" onclick="openSettings()" title="Settings"><svg class="ico"><use href="#i-settings"/></svg><span class="lbl">Settings</span></button>
       <button class="account-btn" type="button" onclick="doSignOut()" title="Sign out"><svg class="ico"><use href="#i-logout"/></svg><span class="lbl">Sign out</span></button>
     </div>
   </div>
 </aside>
+
+<div class="modal-scrim" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal modal-settings">
+    <div class="modal-head">
+      <h2 id="settingsTitle">Settings</h2>
+      <div class="sub">Admin only — client logins never see this.</div>
+      <button class="modal-x" id="settingsClose" type="button" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <section class="settings-section" aria-labelledby="usersTitle">
+        <h3 id="usersTitle">Dashboard logins</h3>
+        <div class="lead">One row per client login. Set a new password, or revoke the login — revoking takes effect on that client&rsquo;s next request.</div>
+        <div class="modal-err" id="userErr"></div>
+        <div id="userList"><div class="acct-empty">Loading…</div></div>
+        <div class="user-admin" id="userAdminNote"></div>
+        <div class="note" id="userNote"></div>
+      </section>
+      <section class="settings-section" aria-labelledby="chanTitle">
+        <h3 id="chanTitle">Slack channels</h3>
+        <div class="lead">Where each account&rsquo;s budget alerts and summaries are posted. Blank = not posting. Use the encoded channel id (e.g. C0BTHN6RC2J), not the #name.</div>
+        <div class="modal-err" id="chanErr"></div>
+        <div id="chanList"><div class="acct-empty">Loading…</div></div>
+        <div class="chan-help">The bot must be able to post in the channel: public channels need <code>chat:write.public</code>, a private channel needs <code>/invite @bot</code> once.</div>
+        <div class="note" id="chanNote"></div>
+      </section>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-save" id="settingsDone" type="button">Done</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-scrim" id="acctModal" role="dialog" aria-modal="true" aria-labelledby="acctModalTitle">
   <div class="modal">
@@ -1304,6 +1336,275 @@ document.getElementById('acctList').addEventListener('click', function (e) {
 acctModal.addEventListener('click', function (e) { if (e.target === acctModal) closeAcctModal(); });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape' && acctModal.classList.contains('open')) closeAcctModal();
+});
+
+// ── Settings modal (admin only): dashboard logins + Slack channels ──
+const settingsModal = document.getElementById('settingsModal');
+function openSettings() {
+  closeNav();
+  userClearErr(); chanClearErr();
+  document.getElementById('userList').innerHTML = '<div class="acct-empty">Loading…</div>';
+  document.getElementById('chanList').innerHTML = '<div class="acct-empty">Loading…</div>';
+  settingsModal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  loadUsers();
+  loadChannels();
+}
+function closeSettings() {
+  settingsModal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+const chanErr = document.getElementById('chanErr');
+function chanShowErr(msg) { chanErr.textContent = msg; chanErr.classList.add('show'); }
+function chanClearErr() { chanErr.classList.remove('show'); }
+const userErr = document.getElementById('userErr');
+function userShowErr(msg) { userErr.textContent = msg; userErr.classList.add('show'); }
+function userClearErr() { userErr.classList.remove('show'); }
+
+async function loadChannels() {
+  try {
+    const res = await fetch(API_BASE + '/api/channels', { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    renderChannels(data);
+  } catch (err) {
+    document.getElementById('chanList').innerHTML =
+      '<div class="acct-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+function renderChannels(data) {
+  const note = document.getElementById('chanNote');
+  if (note) {
+    note.textContent = data.botConfigured
+      ? 'Ops alerts (Meta token expiry) go to ' + (data.opsChannel || 'no channel — set SLACK_OPS_CHANNEL in .env')
+      : 'No SLACK_BOT_TOKEN set — nothing will post until it is.';
+  }
+  document.getElementById('chanList').innerHTML = (data.channels || []).map(function (c) {
+    return '<div class="chan-row" data-ws="' + esc(c.id) + '">' +
+      '<div class="chan-main">' +
+      '<div class="chan-name">' + esc(c.name) + '</div>' +
+      '<div class="chan-sub">' + c.geoCount + ' geo' + (c.geoCount === 1 ? '' : 's') +
+      (c.slackChannel ? '' : ' · not posting') + '</div>' +
+      '</div>' +
+      '<input class="chan-input" type="text" autocomplete="off" spellcheck="false" ' +
+      'placeholder="C0BTHN6RC2J" value="' + esc(c.slackChannel || '') + '" ' +
+      'aria-label="Slack channel for ' + esc(c.name) + '">' +
+      '<button class="btn btn-sm chan-save" type="button">Save</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function saveChannel(row) {
+  const id = row.dataset.ws;
+  const input = row.querySelector('.chan-input');
+  const btn = row.querySelector('.chan-save');
+  btn.disabled = true;
+  btn.textContent = '…';
+  chanClearErr();
+  try {
+    const res = await fetch(API_BASE + '/api/channels/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ slackChannel: input.value.trim() }),
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      chanShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      return;
+    }
+    input.value = data.slackChannel || '';
+    btn.textContent = 'Saved';
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }, 1400);
+    const sub = row.querySelector('.chan-sub');
+    if (sub) {
+      sub.textContent = sub.textContent.replace(' · not posting', '') +
+        (data.slackChannel ? '' : ' · not posting');
+    }
+    const ws = await fetchWorkspaces();
+    if (ws) { workspaces = ws.workspaces; renderSidebar(); }
+  } catch (err) {
+    chanShowErr(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+
+async function loadUsers() {
+  try {
+    const res = await fetch(API_BASE + '/api/users', { credentials: 'same-origin' });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      document.getElementById('userList').innerHTML =
+        '<div class="acct-empty">' + esc(data.error || ('HTTP ' + res.status)) + '</div>';
+      return;
+    }
+    renderUsers(data);
+  } catch (err) {
+    document.getElementById('userList').innerHTML =
+      '<div class="acct-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+function renderUsers(data) {
+  const list = data.users || [];
+  const note = document.getElementById('userNote');
+  if (note) {
+    note.textContent = list.length
+      ? list.length + ' client login' + (list.length === 1 ? '' : 's')
+      : 'No client logins yet.';
+  }
+
+  const adminNote = document.getElementById('userAdminNote');
+  if (adminNote) {
+    adminNote.innerHTML = data.admin
+      ? 'Admin <code>' + esc(data.admin) + '</code> sees every account and is the only login that ' +
+        'can add or remove them. It is set in <code>.env</code>, so it cannot be changed here. ' +
+        'A client login opens only the account named beside it — with no sidebar, and no way to ' +
+        'reach another client&rsquo;s numbers. New logins are created together with the ad account, ' +
+        'under <em>Add ad account</em>.'
+      : '';
+  }
+
+  document.getElementById('userList').innerHTML = list.length
+    ? list.map(function (u) {
+        const scope = (u.workspaceNames || []).join(', ') || 'no account';
+        return '<div class="user-row" data-user="' + esc(u.username) + '">' +
+          '<div class="user-main">' +
+          '<div class="user-name">' + esc(u.username) + '</div>' +
+          '<div class="user-sub">' + esc(scope) + '</div>' +
+          '</div>' +
+          '<input class="user-input" type="text" autocomplete="new-password" spellcheck="false" ' +
+          'placeholder="new password" aria-label="New password for ' + esc(u.username) + '">' +
+          '<button class="btn btn-sm user-save" type="button">Set</button>' +
+          '<button class="btn btn-sm btn-danger user-del" type="button">Revoke</button>' +
+          '</div>';
+      }).join('')
+    : '<div class="acct-empty">No client logins yet — one is created with each ad account.</div>';
+}
+
+async function saveUserPassword(row) {
+  const username = row.dataset.user;
+  const input = row.querySelector('.user-input');
+  const btn = row.querySelector('.user-save');
+  const password = input.value;
+  userClearErr();
+  if (!password) { userShowErr('Type the new password first.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password: password }),
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      userShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.textContent = 'Set';
+      return;
+    }
+    // Cleared once saved — the field holds a live password, not something to
+    // leave sitting on screen.
+    input.value = '';
+    btn.textContent = 'Saved';
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = 'Set';
+    }, 1400);
+  } catch (err) {
+    userShowErr(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Set';
+  }
+}
+
+// Two clicks rather than a confirm() — a browser dialog blocks the page, and
+// revoking a login takes effect on that client's very next request.
+async function revokeUser(row) {
+  const username = row.dataset.user;
+  const btn = row.querySelector('.user-del');
+  userClearErr();
+
+  if (btn.dataset.armed !== '1') {
+    btn.dataset.armed = '1';
+    btn.textContent = 'Sure?';
+    setTimeout(function () {
+      if (btn.dataset.armed === '1') {
+        btn.dataset.armed = '';
+        btn.textContent = 'Revoke';
+      }
+    }, 4000);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (res.status === 401) { toLogin(); return; }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      userShowErr(data.error || ('Failed (HTTP ' + res.status + ')'));
+      btn.disabled = false;
+      btn.dataset.armed = '';
+      btn.textContent = 'Revoke';
+      return;
+    }
+    loadUsers();
+  } catch (err) {
+    userShowErr(err.message);
+    btn.disabled = false;
+    btn.dataset.armed = '';
+    btn.textContent = 'Revoke';
+  }
+}
+
+
+document.getElementById('chanList').addEventListener('click', function (e) {
+  const btn = e.target.closest && e.target.closest('.chan-save');
+  if (btn) saveChannel(btn.closest('.chan-row'));
+});
+document.getElementById('chanList').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  const input = e.target.closest && e.target.closest('.chan-input');
+  if (input) { e.preventDefault(); saveChannel(input.closest('.chan-row')); }
+});
+document.getElementById('userList').addEventListener('click', function (e) {
+  if (!e.target.closest) return;
+  const save = e.target.closest('.user-save');
+  if (save) { saveUserPassword(save.closest('.user-row')); return; }
+  const del = e.target.closest('.user-del');
+  if (del) revokeUser(del.closest('.user-row'));
+});
+document.getElementById('userList').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  const input = e.target.closest && e.target.closest('.user-input');
+  if (input) { e.preventDefault(); saveUserPassword(input.closest('.user-row')); }
+});
+
+
+document.getElementById('settingsClose').addEventListener('click', closeSettings);
+document.getElementById('settingsDone').addEventListener('click', closeSettings);
+settingsModal.addEventListener('click', function (e) { if (e.target === settingsModal) closeSettings(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && settingsModal.classList.contains('open')) closeSettings();
 });
 
 // ── Mobile drawer ──

@@ -865,13 +865,12 @@ empty database the server backfills 180 days in the background; after that `CREA
 
 ---
 
-## Settings page
+## Settings
 
-`/settings` (admin only — a client login is redirected to the dashboard) manages **dashboard logins**
-(set a client's password, revoke a login) and **Slack channels** (the channel each account's alerts post
-to). It is reached from the account panel at the bottom of the sidebar, which also holds Sign out. Clients
-see the same panel with Sign out only. Adding an ad account (which creates its client login) still lives in
-the sidebar under *Add ad account*.
+The Settings button in the account panel at the bottom of the sidebar (admin only) opens a modal with
+**dashboard logins** (set a client's password, revoke a login) and **Slack channels** (the channel each
+account's alerts post to). Clients see the panel with Sign out only. Adding an ad account (which creates its
+client login) lives in the sidebar under *Add ad account*.
 
 ---
 

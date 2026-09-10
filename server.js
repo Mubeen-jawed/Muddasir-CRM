@@ -977,14 +977,6 @@ function denyNonAdmin(req, res) {
   return true;
 }
 
-// Settings page: admin only. The API behind it (users, channels) already refuses
-// non-admins; this keeps the page itself from being served to a client login.
-app.get(["/settings", "/settings.html"], (req, res) => {
-  if (!isAdmin(req)) return res.redirect(302, "/");
-  res.set("Cache-Control", "no-store");
-  res.sendFile(path.join(__dirname, "public", "settings.html"));
-});
-
 app.get("/login", (req, res) => {
   if (auth.AUTH_ENABLED && auth.sessionUser(req)) return res.redirect(302, "/");
   res.set("Cache-Control", "no-store");
