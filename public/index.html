@@ -643,6 +643,14 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .chart canvas{cursor:crosshair;touch-action:pan-y}
 .chart-tip{position:absolute;top:34px;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:7px 10px;font-size:11px;line-height:1.5;color:var(--text);white-space:nowrap;z-index:5}
 .chart-tip b{display:block;font-weight:700;color:var(--text-strong);margin-bottom:2px}
+
+/* ── Chart skeleton ── */
+.chart-skel{position:absolute;left:52px;right:22px;top:38px;bottom:30px;display:flex;align-items:flex-end;gap:6px;pointer-events:none}
+.chart-skel .sk{flex:1;height:40%;border-radius:2px}
+/* ── Icon buttons carry no fill or border; only the glyph ── */
+.btn-ico,.modal-x,.sidebar-close,.hamburger,.side-toggle{background:transparent !important;border-color:transparent !important;color:var(--muted)}
+.btn-ico:hover:not(:disabled),.modal-x:hover,.sidebar-close:hover,.hamburger:hover,.side-toggle:hover{background:transparent !important;color:var(--text-strong)}
+.btn-ico:focus-visible,.modal-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -1767,7 +1775,7 @@ function openBreakdownFromHash() {
   document.getElementById('bdText').innerHTML = '';
   document.getElementById('bdList').innerHTML = '';
   document.getElementById('campErr').classList.remove('show');
-  ['chSpend', 'chBudget', 'chLeads', 'chCtr'].forEach((id) => { const c = document.getElementById(id); c.getContext('2d').clearRect(0, 0, c.width, c.height); });
+  renderBreakdownSkeleton();
   showView('breakdown');
   window.scrollTo({ top: 0 });
   loadCampaign(url);
@@ -1784,6 +1792,8 @@ async function loadCampaign(url) {
     campData = data;
     renderCampaign();
   } catch (err) {
+    clearBreakdownSkeleton();
+    document.getElementById('campStrip').innerHTML = ''; document.getElementById('bdText').innerHTML = ''; document.getElementById('bdList').innerHTML = '';
     document.getElementById('campSub').textContent = '';
     const e = document.getElementById('campErr'); e.textContent = err.message; e.classList.add('show');
   }
@@ -1795,7 +1805,26 @@ function campRangeDays() {
   return all.slice(-parseInt(campRangeKey, 10));
 }
 
+// Page shape while the daily series is fetched: grey blocks in each chart, strip, text and table.
+function renderBreakdownSkeleton() {
+  document.querySelectorAll('#campCharts .chart').forEach((fig) => {
+    const cv = fig.querySelector('canvas'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+    let sk = fig.querySelector('.chart-skel');
+    if (!sk) { sk = document.createElement('div'); sk.className = 'chart-skel'; fig.appendChild(sk); }
+    sk.innerHTML = Array.from({ length: 12 }, (_, i) => `<span class="sk" style="height:${30 + ((i * 37) % 60)}%"></span>`).join('');
+    sk.hidden = false;
+    const tip = fig.querySelector('.chart-tip'); if (tip) tip.hidden = true;
+  });
+  document.getElementById('campStrip').innerHTML = Array.from({ length: 6 }, () => `<div class="fact">${skLine('45%', 10)}${skLine('30%', 12)}</div>`).join('');
+  document.getElementById('bdText').innerHTML = Array.from({ length: 3 }, (_, i) => `<p>${skLine(i === 2 ? '55%' : '92%', 12)}</p>`).join('');
+  document.getElementById('bdList').innerHTML = `<div class="bd-wrap"><table class="bd-table"><tbody>${Array.from({ length: 5 }, () => `<tr><td class="name">${skLine('60%', 11)}</td>${Array.from({ length: 4 }, () => `<td class="num">${skLine('40px', 11)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function clearBreakdownSkeleton() {
+  document.querySelectorAll('#campCharts .chart-skel').forEach((sk) => { sk.hidden = true; });
+}
+
 function renderCampaign() {
+  clearBreakdownSkeleton();
   const c = campData.campaign;
   document.getElementById('campTitle').textContent = c.name || 'Campaign';
   const isCampaign = !campData.kind || campData.kind === 'campaign';
