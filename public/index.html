@@ -347,7 +347,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── Summary cards ── */
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin-bottom:20px}
-.stat{padding:14px 18px;border-radius:4px;background:var(--panel);border:1px solid var(--line-soft);min-width:0}
+.stat{padding:14px 18px;border-radius:4px;background:var(--panel);border:none;min-width:0}
 .stat-label{font-size:12px;color:var(--dim);margin-bottom:4px}
 .stat-val{font-size:clamp(19px,2.1vw,24px);font-weight:700;overflow-wrap:anywhere}
 .stat-val.over{color:var(--danger)}
@@ -356,9 +356,9 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .stat-sub{font-size:10px;color:var(--dim);margin-top:3px}
 
 /* ── Geo cards ── */
-.geo-grid{display:grid;grid-template-columns:1fr;gap:14px}
-.geo-card{background:var(--panel);border-radius:var(--radius);padding:18px clamp(14px,2vw,20px);border:1px solid var(--line-soft);transition:border-color 0.2s;display:flex;flex-direction:column;min-width:0}
-.geo-card.over-budget{border-color:var(--line)}
+.geo-grid{display:grid;grid-template-columns:1fr;gap:28px}
+.geo-card{background:var(--panel);border-radius:var(--radius);padding:18px clamp(14px,2vw,20px);border:none;transition:border-color 0.2s;display:flex;flex-direction:column;min-width:0}
+
 .geo-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .geo-name{display:flex;align-items:center;gap:10px;font-size:clamp(15px,1.4vw,17px);font-weight:600;min-width:0}
 .geo-dot{display:none}
@@ -464,7 +464,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 /* Laptops — two geo cards side by side */
 @media(min-width:1024px){
   .wrap{padding-top:32px}
-  .geo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .geo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;align-items:start}
   .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 
@@ -561,7 +561,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* ── County card: two large figures, then plain facts ── */
 .hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
-.hero-tile{padding:12px 14px;background:var(--bg);border:1px solid var(--line-soft);border-radius:4px;min-width:0;cursor:pointer}
+.hero-tile{padding:12px 14px;background:var(--bg);border:none;border-radius:4px;min-width:0;cursor:pointer}
 .hero-label{font-size:11px;color:var(--dim);margin-bottom:3px}
 .hero-val{font-size:clamp(20px,2.2vw,28px);font-weight:700;letter-spacing:-0.4px;line-height:1.15;overflow-wrap:anywhere}
 .hero-sub{font-size:11px;color:var(--dim);margin-top:3px}
@@ -585,7 +585,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .seg button.active{background:var(--hover);color:var(--text)}
 .camp-note{font-size:11px;color:var(--faint)}
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.chart{margin:0;min-width:0;border:1px solid var(--line-soft);border-radius:4px;padding:10px 12px 8px;background:var(--panel)}
+.chart{margin:0;min-width:0;border:none;border-radius:4px;padding:10px 12px 8px;background:var(--panel)}
 .chart figcaption{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
 .chart figcaption small{font-weight:400;color:var(--dim);font-size:11px}
 .chart canvas{width:100%;height:180px;display:block}
