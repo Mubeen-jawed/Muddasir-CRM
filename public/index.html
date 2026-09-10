@@ -441,7 +441,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   .header-actions{flex-direction:row;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px}
   .header-buttons{justify-content:flex-start}
   .header-buttons .btn{padding:8px 14px;font-size:12px}
-  .summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .stat{padding:12px 14px}
   .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .geo-head{align-items:flex-start}
@@ -452,20 +451,17 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 
 /* Very small phones — one column beats two cramped ones */
 @media(max-width:380px){
-  .summary{grid-template-columns:1fr}
   .camp-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 /* Tablets — three metrics read better than an auto-fit orphan row */
 @media(min-width:601px) and (max-width:900px){
   .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 /* Laptops — two geo cards side by side */
 @media(min-width:1024px){
   .wrap{padding-top:32px}
-  .summary{grid-template-columns:repeat(4,minmax(0,1fr))}
   .geo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
   .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -540,6 +536,39 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
 .camp-stat .val-dim{color:var(--dim)}
 .camp-stat .val-danger{color:var(--danger)}
 .camp-stat .val-warn{color:var(--danger)}
+
+/* ── Settings modal ── */
+.modal-settings{max-width:640px}
+.settings-section{padding:4px 0 16px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.settings-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:4px}
+.settings-section h3{font-size:14px;font-weight:700;color:var(--text-strong);margin-bottom:4px}
+.settings-section .lead{font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.5}
+.settings-section .note{font-size:11px;color:var(--faint);margin-top:8px}
+.user-admin{font-size:11px;color:var(--faint);line-height:1.55;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft)}
+.user-admin code,.chan-help code{background:var(--hover);padding:1px 5px;border-radius:4px}
+.chan-help{font-size:11px;color:var(--faint);line-height:1.55;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft)}
+
+/* ── Summary tiles: two large, two small ── */
+.summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stat-lg{grid-column:span 2}
+.stat-lg .stat-val{font-size:clamp(26px,3vw,36px);letter-spacing:-0.6px;line-height:1.1}
+.stat-lg .stat-label{font-size:12px}
+.stat-sub{font-size:11px;color:var(--dim);margin-top:4px}
+@media(min-width:601px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.stat:not(.stat-lg){grid-column:span 1}}
+@media(min-width:1024px){.summary{grid-template-columns:2fr 2fr 1fr 1fr}.stat-lg{grid-column:auto}}
+
+/* ── County card: two large figures, then plain facts ── */
+.hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.hero-tile{padding:12px 14px;background:var(--panel-alt);border-radius:4px;min-width:0;cursor:help}
+.hero-label{font-size:11px;color:var(--dim);margin-bottom:3px}
+.hero-val{font-size:clamp(20px,2.2vw,28px);font-weight:700;letter-spacing:-0.4px;line-height:1.15;overflow-wrap:anywhere}
+.hero-sub{font-size:11px;color:var(--dim);margin-top:3px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;margin-top:8px}
+.fact{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:12px;cursor:help;min-width:0}
+.fact-label{color:var(--dim);white-space:nowrap}
+.fact-label small,.fact-val small{display:block;font-size:10px;color:var(--faint);font-weight:400;white-space:normal}
+.fact-val{font-weight:600;font-variant-numeric:tabular-nums;text-align:right;color:var(--text);min-width:0}
+@media(max-width:600px){.hero{grid-template-columns:1fr}.facts{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1009,10 +1038,10 @@ function skLine(w, h) { return `<span class="sk" style="width:${w};height:${h ||
 // Skeleton of the page shape while the first fetch (or a workspace switch) is in flight.
 function renderSkeleton() {
   document.getElementById('alerts').innerHTML = '';
-  document.getElementById('summary').innerHTML = Array.from({ length: 4 }, () =>
-    `<div class="stat skel"><div class="stat-label">${skLine('60%', 10)}</div><div class="stat-val">${skLine('75%', 20)}</div></div>`).join('');
+  document.getElementById('summary').innerHTML = [2, 2, 1, 1].map((span) =>
+    `<div class="stat skel ${span === 2 ? 'stat-lg' : ''}"><div class="stat-label">${skLine('50%', 10)}</div><div class="stat-val">${skLine(span === 2 ? '55%' : '70%', span === 2 ? 30 : 20)}</div><div class="stat-sub">${skLine('40%', 9)}</div></div>`).join('');
   document.getElementById('geoCards').innerHTML = Array.from({ length: 2 }, () =>
-    `<div class="geo-card skel">${skLine('40%', 16)}${skLine('100%', 5)}${skLine('55%', 10)}<div class="metrics">${Array.from({ length: 6 }, () => `<div class="metric">${skLine('50%', 10)}${skLine('70%', 16)}</div>`).join('')}</div></div>`).join('');
+    `<div class="geo-card skel">${skLine('40%', 16)}${skLine('100%', 5)}${skLine('55%', 10)}<div class="hero">${Array.from({ length: 2 }, () => `<div class="hero-tile">${skLine('45%', 10)}${skLine('65%', 24)}</div>`).join('')}</div><div class="facts">${Array.from({ length: 8 }, () => `<div class="fact">${skLine('45%', 10)}${skLine('25%', 10)}</div>`).join('')}</div></div>`).join('');
 }
 
 
@@ -1841,11 +1870,23 @@ function renderSummary(summary, geos) {
     landSub = `${fmt(-projDelta)} under budget`;
   }
 
+  const pctSpent = summary.totalBudget > 0 ? (summary.totalSpent / summary.totalBudget) * 100 : 0;
+  const daysLeft = geos.length ? geos[0].daysLeft : null;
+  const avgCpl = summary.totalLeads > 0 ? summary.totalSpent / summary.totalLeads : 0;
+  const spentCls = summary.totalSpent > summary.totalBudget ? 'over' : '';
   return `
-    <div class="stat" title="Total budget across all 4 counties this month"><div class="stat-label">Monthly budget</div><div class="stat-val">${fmt(summary.totalBudget)}</div></div>
-    <div class="stat" title="Total spent so far this month across all counties"><div class="stat-label">Spent so far</div><div class="stat-val ${summary.totalSpent > summary.totalBudget ? 'over' : ''}">${fmt(summary.totalSpent)}</div></div>
-    <div class="stat" title="Estimated total spend by month-end at the last 7 days' pace. Goal: land within 5% of budget."><div class="stat-label">${landLabel}</div><div class="stat-val ${landClass}">${fmt(totalProjEOM)}</div><div class="stat-sub">${landSub} · ${Math.round(projPct)}% of budget</div></div>
-    <div class="stat" title="Total leads generated this month across all counties"><div class="stat-label">Leads this month</div><div class="stat-val">${summary.totalLeads.toLocaleString()}</div></div>
+    <div class="stat stat-lg" title="Total spent so far this month across all counties, against the combined monthly budget">
+      <div class="stat-label">Spent so far</div>
+      <div class="stat-val ${spentCls}">${fmt(summary.totalSpent)}</div>
+      <div class="stat-sub">of ${fmt(summary.totalBudget)} budget · ${Math.round(pctSpent)}%${daysLeft != null ? ` · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : ''}</div>
+    </div>
+    <div class="stat stat-lg" title="Estimated total spend by month-end at the last 7 days' pace. Goal: land within 5% of budget.">
+      <div class="stat-label">${landLabel}</div>
+      <div class="stat-val ${landClass}">${fmt(totalProjEOM)}</div>
+      <div class="stat-sub">${landSub} · ${Math.round(projPct)}% of budget</div>
+    </div>
+    <div class="stat" title="Total leads generated this month across all counties"><div class="stat-label">Leads</div><div class="stat-val">${summary.totalLeads.toLocaleString()}</div><div class="stat-sub">this month</div></div>
+    <div class="stat" title="Average ad spend per lead this month (spent ÷ leads)"><div class="stat-label">Cost per lead</div><div class="stat-val">${avgCpl > 0 ? fmtDec(avgCpl) : '—'}</div><div class="stat-sub">average</div></div>
   `;
 }
 
@@ -1920,61 +1961,28 @@ function renderGeoCard(g) {
         <div class="bar-fill" style="width:${Math.min(100, g.pctSpent)}%;background:${barColor(g.status)}"></div>
       </div>
 
-      <div class="metrics">
-        <div class="metric" title="How much of this county's monthly budget is still available to spend">
-          <div class="metric-label">Budget left <span class="info">?</span></div>
-          <div class="metric-val ${g.remaining === 0 ? 'val-danger' : ''}">${g.remaining > 0 ? fmt(g.remaining) : '$0'}</div>
+      <div class="hero">
+        <div class="hero-tile" title="Estimated total spend by the end of the month if the last 7 days' pace continues. Sweet spot is landing at 95-105% of budget — under-spending and over-spending both flag.">
+          <div class="hero-label">On track to spend</div>
+          <div class="hero-val ${g.projectedEOM > g.budget * 1.15 ? 'val-danger' : g.projectedEOM > g.budget * 1.05 ? 'val-warn' : g.projectedEOM < g.budget * 0.95 ? 'val-warn' : ''}">${fmt(g.projectedEOM)}</div>
+          <div class="hero-sub">${g.budget > 0 ? Math.round((g.projectedEOM / g.budget) * 100) + '% of budget' : ''} · by month-end</div>
         </div>
-        <div class="metric" title="Days remaining in the current calendar month">
-          <div class="metric-label">Days left in month <span class="info">?</span></div>
-          <div class="metric-val">${g.daysLeft}</div>
+        <div class="hero-tile" title="Leads generated this month for this county, and the average ad spend per lead (spent ÷ leads)">
+          <div class="hero-label">Leads this month</div>
+          <div class="hero-val">${g.leads.toLocaleString()}</div>
+          <div class="hero-sub">${g.cpl > 0 ? fmtDec(g.cpl) + ' per lead' : 'no leads yet'}${g.weekLeads > 0 ? ' · ' + g.weekLeads.toLocaleString() + ' in the last 7 days' : ''}</div>
         </div>
-        <div class="metric" title="Ideal daily spend to hit budget exactly by month-end (monthly budget ÷ days in month)">
-          <div class="metric-label">Ideal daily spend <span class="info">?</span></div>
-          <div class="metric-val">${fmt(g.dailyTarget)}</div>
-        </div>
-        <div class="metric" title="Average daily spend over the last 7 days — the forward-looking pace used to project month-end totals">
-          <div class="metric-label">Your daily avg <span class="info">?</span></div>
-          <div class="metric-val ${paceRatio > 1.15 ? 'val-warn' : ''}">${fmt(dailyAvg)}</div>
-          ${paceRatio > 1 ? `<div class="metric-sub">${Math.round((paceRatio - 1) * 100)}% above ideal · last 7 days</div>` : paceRatio > 0 && paceRatio < 0.85 ? `<div class="metric-sub">${Math.round((1 - paceRatio) * 100)}% below ideal · last 7 days</div>` : `<div class="metric-sub">last 7 days</div>`}
-        </div>
-        <div class="metric" title="Suggested daily spend for the rest of the month to land exactly on budget (budget left ÷ days left)">
-          <div class="metric-label">Suggested daily now <span class="info">?</span></div>
-          <div class="metric-val ${g.remaining <= 0 ? 'val-danger' : ''}">${g.remaining > 0 ? fmt(g.recDaily) : 'Pause'}</div>
-        </div>
-        <div class="metric" title="Estimated total spend by the end of the month if the last 7 days' pace continues. Sweet spot is landing at 95-105% of budget — under-spending and over-spending both flag.">
-          <div class="metric-label">On track to spend <span class="info">?</span></div>
-          <div class="metric-val ${g.projectedEOM > g.budget * 1.15 ? 'val-danger' : g.projectedEOM > g.budget * 1.05 ? 'val-warn' : g.projectedEOM < g.budget * 0.95 ? 'val-warn' : ''}">${fmt(g.projectedEOM)}</div>
-          <div class="metric-sub">by month-end · last 7d pace</div>
-        </div>
-        <div class="metric" title="Total leads generated this month for this county">
-          <div class="metric-label">Leads this month <span class="info">?</span></div>
-          <div class="metric-val">${g.leads.toLocaleString()}</div>
-        </div>
-        <div class="metric" title="Cost Per Lead — average ad spend to generate one lead (spent ÷ leads)">
-          <div class="metric-label">Cost per lead <span class="info">?</span></div>
-          <div class="metric-val">${g.cpl > 0 ? fmtDec(g.cpl) : '—'}</div>
-        </div>
-        <div class="metric" title="Total leads generated over the last 7 days. Complements 'Leads this month' by showing recent velocity — a slowdown here means today's ads are working less than earlier this month.">
-          <div class="metric-label">Leads (last 7d) <span class="info">?</span></div>
-          <div class="metric-val">${(g.weekLeads || 0).toLocaleString()}</div>
-          <div class="metric-sub">${g.weekLeads > 0 && g.leads > 0 ? Math.round((g.weekLeads / g.leads) * 100) + '% of monthly total' : ''}</div>
-        </div>
-        <div class="metric" title="Landing page conversion rate — % of ad clicks that turned into leads. Below 3% suggests LP needs work; above 10% is strong for lead-gen. This is your funnel's bottom half.">
-          <div class="metric-label">Click-to-lead <span class="info">?</span></div>
-          <div class="metric-val ${g.clickToLead > 0 && g.clickToLead < 1 ? 'val-danger' : g.clickToLead > 0 && g.clickToLead < 3 ? 'val-warn' : ''}">${g.clickToLead > 0 ? g.clickToLead.toFixed(1) + '%' : '—'}</div>
-          <div class="metric-sub">${g.clicks > 0 ? g.leads.toLocaleString() + ' / ' + g.clicks.toLocaleString() + ' clicks' : ''}</div>
-        </div>
-        <div class="metric" title="Click-through rate — % of impressions that turned into clicks. The media buyer's #1 creative-health metric. Below 1% = weak hook; above 2% = strong ad creative. Drops before CPL rises, so use it as an early warning.">
-          <div class="metric-label">Click-through rate <span class="info">?</span></div>
-          <div class="metric-val ${g.ctr > 0 && g.ctr < 1 ? 'val-danger' : g.ctr > 0 && g.ctr < 2 ? 'val-warn' : ''}">${g.ctr > 0 ? g.ctr.toFixed(2) + '%' : '—'}</div>
-          <div class="metric-sub">${g.impressions > 0 ? g.clicks.toLocaleString() + ' / ' + g.impressions.toLocaleString() + ' views' : ''}</div>
-        </div>
-        <div class="metric" title="Frequency — how many times the average person has seen your ads. Above 4 = creative fatigue setting in; above 6 = refresh creatives now. Combined with CTR: falling CTR + high freq = audience tired; falling CTR + low freq = weak creative.">
-          <div class="metric-label">Frequency <span class="info">?</span></div>
-          <div class="metric-val ${g.frequency >= 6 ? 'val-danger' : g.frequency >= 4 ? 'val-warn' : ''}">${g.frequency > 0 ? g.frequency.toFixed(2) + 'x' : '—'}</div>
-          <div class="metric-sub">${g.frequency >= 6 ? 'creative burned — refresh' : g.frequency >= 4 ? 'fatigue creeping in' : g.frequency > 0 ? 'fresh audience' : ''}</div>
-        </div>
+      </div>
+
+      <div class="facts">
+        <div class="fact" title="How much of this county's monthly budget is still available to spend"><span class="fact-label">Budget left</span><span class="fact-val ${g.remaining === 0 ? 'val-danger' : ''}">${g.remaining > 0 ? fmt(g.remaining) : '$0'}</span></div>
+        <div class="fact" title="Suggested daily spend for the rest of the month to land exactly on budget (budget left ÷ days left)"><span class="fact-label">Suggested daily now</span><span class="fact-val ${g.remaining <= 0 ? 'val-danger' : ''}">${g.remaining > 0 ? fmt(g.recDaily) : 'Pause'}</span></div>
+        <div class="fact" title="Average daily spend over the last 7 days — the forward-looking pace used to project month-end totals"><span class="fact-label">Your daily avg <small>last 7 days</small></span><span class="fact-val ${paceRatio > 1.15 ? 'val-warn' : ''}">${fmt(dailyAvg)}${paceRatio > 1 ? `<small>${Math.round((paceRatio - 1) * 100)}% above ideal</small>` : paceRatio > 0 && paceRatio < 0.85 ? `<small>${Math.round((1 - paceRatio) * 100)}% below ideal</small>` : ''}</span></div>
+        <div class="fact" title="Ideal daily spend to hit budget exactly by month-end (monthly budget ÷ days in month)"><span class="fact-label">Ideal daily spend</span><span class="fact-val">${fmt(g.dailyTarget)}</span></div>
+        <div class="fact" title="Days remaining in the current calendar month"><span class="fact-label">Days left in month</span><span class="fact-val">${g.daysLeft}</span></div>
+        <div class="fact" title="Landing page conversion rate — % of ad clicks that turned into leads. Below 3% suggests the landing page needs work; above 10% is strong for lead-gen."><span class="fact-label">Click-to-lead</span><span class="fact-val ${g.clickToLead > 0 && g.clickToLead < 1 ? 'val-danger' : g.clickToLead > 0 && g.clickToLead < 3 ? 'val-warn' : ''}">${g.clickToLead > 0 ? g.clickToLead.toFixed(1) + '%' : '—'}${g.clicks > 0 ? `<small>${g.leads.toLocaleString()} / ${g.clicks.toLocaleString()} clicks</small>` : ''}</span></div>
+        <div class="fact" title="Click-through rate — % of impressions that turned into clicks. Below 1% = weak hook; above 2% = strong creative. Drops before CPL rises, so it is an early warning."><span class="fact-label">Click-through rate</span><span class="fact-val ${g.ctr > 0 && g.ctr < 1 ? 'val-danger' : g.ctr > 0 && g.ctr < 2 ? 'val-warn' : ''}">${g.ctr > 0 ? g.ctr.toFixed(2) + '%' : '—'}${g.impressions > 0 ? `<small>${g.clicks.toLocaleString()} / ${g.impressions.toLocaleString()} views</small>` : ''}</span></div>
+        <div class="fact" title="Frequency — how many times the average person has seen the ads. Above 4 = creative fatigue setting in; above 6 = refresh creatives now."><span class="fact-label">Frequency</span><span class="fact-val ${g.frequency >= 6 ? 'val-danger' : g.frequency >= 4 ? 'val-warn' : ''}">${g.frequency > 0 ? g.frequency.toFixed(2) + 'x' : '—'}${g.frequency >= 6 ? '<small>creative burned — refresh</small>' : g.frequency >= 4 ? '<small>fatigue creeping in</small>' : ''}</span></div>
       </div>
 
       ${g.campaigns.length > 0 ? `
