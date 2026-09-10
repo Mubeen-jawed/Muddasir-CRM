@@ -827,7 +827,6 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   <div class="header">
     <div>
       <h1>Budget pacing</h1>
-      <div class="sub" id="monthLabel"></div>
     </div>
     <div class="header-actions">
       <div class="header-buttons">
@@ -885,7 +884,7 @@ body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
   <div id="creativeView" style="display:none">
 <div id="cr_dashboard" class="cr-dashboard">
 <div class="cr-toolbar">
-  <div class="cr-sub"><span id="cr_crBusy" class="ios-spinner hidden" aria-hidden="true"><i style="transform:rotate(0deg);animation-delay:-0.917s"></i><i style="transform:rotate(30deg);animation-delay:-0.833s"></i><i style="transform:rotate(60deg);animation-delay:-0.750s"></i><i style="transform:rotate(90deg);animation-delay:-0.667s"></i><i style="transform:rotate(120deg);animation-delay:-0.583s"></i><i style="transform:rotate(150deg);animation-delay:-0.500s"></i><i style="transform:rotate(180deg);animation-delay:-0.417s"></i><i style="transform:rotate(210deg);animation-delay:-0.333s"></i><i style="transform:rotate(240deg);animation-delay:-0.250s"></i><i style="transform:rotate(270deg);animation-delay:-0.167s"></i><i style="transform:rotate(300deg);animation-delay:-0.083s"></i><i style="transform:rotate(330deg);animation-delay:0.000s"></i></span> <span id="cr_headerSub">Loading…</span></div>
+  <div class="cr-sub"><span id="cr_crBusy" class="ios-spinner hidden" aria-hidden="true"><i style="transform:rotate(0deg);animation-delay:-0.917s"></i><i style="transform:rotate(30deg);animation-delay:-0.833s"></i><i style="transform:rotate(60deg);animation-delay:-0.750s"></i><i style="transform:rotate(90deg);animation-delay:-0.667s"></i><i style="transform:rotate(120deg);animation-delay:-0.583s"></i><i style="transform:rotate(150deg);animation-delay:-0.500s"></i><i style="transform:rotate(180deg);animation-delay:-0.417s"></i><i style="transform:rotate(210deg);animation-delay:-0.333s"></i><i style="transform:rotate(240deg);animation-delay:-0.250s"></i><i style="transform:rotate(270deg);animation-delay:-0.167s"></i><i style="transform:rotate(300deg);animation-delay:-0.083s"></i><i style="transform:rotate(330deg);animation-delay:0.000s"></i></span></div>
   <div class="cr-toolbar-actions">
     <a id="cr_exportBtn" class="btn-ghost" href="#" title="Download the ads table as CSV">Export CSV</a>
     <button id="cr_syncBtn" class="btn-ghost cr-admin" title="Pull fresh data from Meta">Sync Meta</button>
@@ -1269,8 +1268,6 @@ function showView(view) {
   if (bar) bar.textContent = h1 ? h1.textContent : '';
   const badge = document.getElementById('liveBadge');
   if (badge) badge.style.display = view === 'budget' ? '' : 'none';
-  const month = document.getElementById('monthLabel');
-  if (month) month.style.display = view === 'budget' ? '' : 'none';
   if (view === 'creative' && window.Creative) window.Creative.refresh();
 }
 
@@ -2528,8 +2525,6 @@ function toggleCampaigns(geoId) {
 function render() {
   if (!dashData) return;
 
-  document.getElementById('monthLabel').textContent =
-    `${dashData.meta.workspaceName || 'Ben ADU'} — ${dashData.meta.month}`;
   // Cards rank by how much attention they need: over budget, then overshooting,
   // then under-spending, then on pace — and within a tier, the biggest miss first.
   const rank = { over_budget: 0, at_risk: 1, under_pacing: 2, on_track: 3 };

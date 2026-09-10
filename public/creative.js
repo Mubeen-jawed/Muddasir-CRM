@@ -62,7 +62,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
     const syncBtn = $('#cr_syncBtn');
     syncBtn.title = state.config.token_configured ? `Scheduled: ${state.config.cron || 'off'}` : 'Add META_ACCESS_TOKEN to .env to enable';
     syncBtn.disabled = !state.config.token_configured;
-    $('#cr_headerSub').textContent = last ? `Last data ${last.source === 'import' ? 'import' : 'sync'}: ${new Date(last.finished_at || last.started_at).toLocaleString()} (${last.status})` : 'No data yet — run a sync or import';
+    const hs = $('#headerSub'); if (hs) hs.textContent = last ? `Last data ${last.source === 'import' ? 'import' : 'sync'}: ${new Date(last.finished_at || last.started_at).toLocaleString()} (${last.status})` : 'No data yet — run a sync or import';
   }
 
   async function refresh() {
