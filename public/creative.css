@@ -191,6 +191,16 @@
  }
 #cr_dashboard .cell.vid { min-width: 56px; }
 #cr_dashboard .kpi-value .cell { font-size: 20px; padding: 2px 8px; }
+#cr_dashboard .ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; vertical-align: -3px; pointer-events: none; }
+#cr_dashboard .btn-ghost .ico { margin-right: 6px; }
+#cr_dashboard .ios-spinner { position: relative; display: inline-block; width: 16px; height: 16px; color: inherit; vertical-align: -3px; }
+#cr_dashboard .ios-spinner i { position: absolute; left: 45%; top: 0; width: 10%; height: 28%; background: currentColor; border-radius: 1px; transform-origin: 50% 180%; animation: ios-fade 1s linear infinite; opacity: 0.15; }
+@keyframes ios-fade { 0% { opacity: 0.85; } 100% { opacity: 0.15; } }
+#cr_dashboard .sk { display: block; background: var(--border-subtle); border-radius: 3px; height: 12px; animation: sk-pulse 1.3s ease-in-out infinite; }
+@keyframes sk-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+#cr_dashboard .grid td .sk { margin: 4px 0; }
+@media (prefers-reduced-motion: reduce) {#cr_dashboard .ios-spinner i, #cr_dashboard .sk { animation: none; }
+ }
 #cr_dashboard .auth-btn { background: var(--accent); color: #0a0a0f; border: none; border-radius: var(--radius-sm); padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
 #cr_dashboard .auth-btn:hover { background: var(--accent-hover); }
 #cr_dashboard .auth-btn.small { padding: 8px 14px; font-size: 13px; }

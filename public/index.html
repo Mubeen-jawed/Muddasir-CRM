@@ -486,8 +486,47 @@ body.client-mode .nav-scrim{display:none !important}
   *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}
 }
 
-/* ── Theme toggle ── */
-.btn-theme{min-width:64px}
+
+/* ── Icons: monochrome strokes in the current text colour ── */
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-3px;pointer-events:none}
+.btn-ico{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text)}
+.btn-ico .ios-spinner{width:14px;height:14px}
+.side-toggle{margin-left:auto;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;padding:0}
+.side-toggle:hover{color:var(--text);border-color:var(--line)}
+.sidebar-title{display:flex;align-items:center;gap:6px}
+.ws-initial{display:none;width:30px;height:30px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--text);margin:0 auto}
+.ws-row.active .ws-initial{border-color:var(--accent);color:var(--accent)}
+.ws-add .ico{margin-right:6px}
+/* Collapsed rail (desktop only) */
+@media(min-width:901px){
+  body.side-collapsed .sidebar{width:64px;flex:0 0 64px;padding:24px 8px}
+  body.side-collapsed .sidebar-title{justify-content:center;padding:0}
+  body.side-collapsed .sidebar-title > span{display:none}
+  body.side-collapsed .side-toggle{margin-left:0}
+  body.side-collapsed .ws-row{padding:8px 0;text-align:center}
+  body.side-collapsed .ws-name > span,body.side-collapsed .ws-meta,body.side-collapsed .ws-count{display:none}
+  body.side-collapsed .ws-initial{display:inline-flex}
+  body.side-collapsed .ws-bar{width:30px;margin:6px auto 0}
+  body.side-collapsed .ws-add{padding:8px 0}
+  body.side-collapsed .ws-add .lbl{display:none}
+  body.side-collapsed .ws-add .ico{margin:0}
+}
+/* ── Loading: iOS-style spinner + skeleton placeholders ── */
+.ios-spinner{position:relative;display:inline-block;width:16px;height:16px;color:inherit;vertical-align:-3px}
+.ios-spinner i{position:absolute;left:45%;top:0;width:10%;height:28%;background:currentColor;border-radius:1px;transform-origin:50% 180%;animation:ios-fade 1s linear infinite;opacity:0.15}
+@keyframes ios-fade{0%{opacity:0.85}100%{opacity:0.15}}
+.live-spin{display:none;width:12px;height:12px}
+.live-badge[data-state="loading"] .live-dot{display:none}
+.live-badge[data-state="loading"] .live-spin{display:inline-block}
+.sk{display:block;background:var(--line-soft);border-radius:3px;height:12px;animation:sk-pulse 1.3s ease-in-out infinite}
+@keyframes sk-pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+.skel .stat-label .sk{width:60%;height:10px}
+.skel .stat-val .sk{width:80%;height:20px;margin-top:6px}
+.geo-card.skel .sk{margin-bottom:10px}
+@media(prefers-reduced-motion:reduce){.ios-spinner i,.sk{animation:none}}
+.loading-overlay{display:none !important}
+
+.btn-theme{}
 /* ── Campaign row values ── */
 .camp-stat .val{color:var(--muted)}
 .camp-stat .val-strong{color:var(--text)}
@@ -497,6 +536,19 @@ body.client-mode .nav-scrim{display:none !important}
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+</svg>
 
 
 <div id="loading" class="loading-overlay" style="display:none">
@@ -525,13 +577,13 @@ body.client-mode .nav-scrim{display:none !important}
 <aside class="sidebar" id="sidebar" aria-label="Accounts">
   <div class="sidebar-head">
     <span class="sidebar-heading">Accounts</span>
-    <button class="sidebar-close" id="navClose" type="button" aria-label="Close accounts menu">&times;</button>
+    <button class="sidebar-close" id="navClose" type="button" aria-label="Close accounts menu"><svg class="ico"><use href="#i-close"/></svg></button>
   </div>
-  <div class="sidebar-title">Accounts</div>
+  <div class="sidebar-title"><span>Accounts</span><button class="side-toggle" id="sideToggle" type="button" onclick="toggleSidebar()" title="Collapse sidebar" aria-label="Collapse sidebar"><svg class="ico"><use href="#i-collapse"/></svg></button></div>
   <div id="wsList"></div>
-  <button class="ws-add" id="addAcctBtn" type="button">+ Add ad account</button>
-  <button class="ws-add" id="chanBtn" type="button">Slack channels</button>
-  <button class="ws-add" id="userBtn" type="button">Dashboard logins</button>
+  <button class="ws-add" id="addAcctBtn" type="button" title="Add ad account"><svg class="ico"><use href="#i-plus"/></svg><span class="lbl">Add ad account</span></button>
+  <button class="ws-add" id="chanBtn" type="button" title="Slack channels"><svg class="ico"><use href="#i-hash"/></svg><span class="lbl">Slack channels</span></button>
+  <button class="ws-add" id="userBtn" type="button" title="Dashboard logins"><svg class="ico"><use href="#i-users"/></svg><span class="lbl">Dashboard logins</span></button>
   <div class="sidebar-foot">
     <button class="btn btn-block" onclick="doSignOut()" title="End this session">Sign out</button>
   </div>
@@ -542,7 +594,7 @@ body.client-mode .nav-scrim{display:none !important}
     <div class="modal-head">
       <h2 id="acctModalTitle">Add an ad account</h2>
       <div class="sub" id="acctStep">Pick an account from Meta</div>
-      <button class="modal-x" id="acctClose" type="button" aria-label="Close">&times;</button>
+      <button class="modal-x" id="acctClose" type="button" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="modal-err" id="acctErr"></div>
@@ -606,7 +658,7 @@ body.client-mode .nav-scrim{display:none !important}
     <div class="modal-head">
       <h2 id="chanModalTitle">Slack channels</h2>
       <div class="sub">Where each account&rsquo;s alerts and summaries are posted. Blank = not posting.</div>
-      <button class="modal-x" id="chanClose" type="button" aria-label="Close">&times;</button>
+      <button class="modal-x" id="chanClose" type="button" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="modal-err" id="chanErr"></div>
@@ -629,7 +681,7 @@ body.client-mode .nav-scrim{display:none !important}
     <div class="modal-head">
       <h2 id="userModalTitle">Dashboard logins</h2>
       <div class="sub">Who can sign in, and which account each one sees.</div>
-      <button class="modal-x" id="userClose" type="button" aria-label="Close">&times;</button>
+      <button class="modal-x" id="userClose" type="button" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="modal-err" id="userErr"></div>
@@ -651,12 +703,13 @@ body.client-mode .nav-scrim{display:none !important}
     </div>
     <div class="header-actions">
       <div class="header-buttons">
-        <button class="btn btn-sm btn-theme" id="themeBtn" type="button" onclick="toggleTheme()" title="Switch between the light and dark theme">Dark</button>
-        <button class="btn btn-sm btn-signout" onclick="doSignOut()" title="End this session">Sign out</button>
-        <button class="btn" id="refreshBtn" onclick="doRefresh()">Refresh live data</button>
+        <button class="btn btn-ico" id="refreshBtn" type="button" onclick="doRefresh()" title="Refresh live data" aria-label="Refresh live data"><svg class="ico"><use href="#i-refresh"/></svg></button>
+        <button class="btn btn-ico btn-theme" id="themeBtn" type="button" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
+        <button class="btn btn-ico btn-signout" type="button" onclick="doSignOut()" title="Sign out" aria-label="Sign out"><svg class="ico"><use href="#i-logout"/></svg></button>
       </div>
       <div class="live-badge" id="liveBadge" data-state="live" title="">
         <span class="live-dot"></span>
+        <span class="ios-spinner live-spin" aria-hidden="true"><i style="transform:rotate(0deg);animation-delay:-0.917s"></i><i style="transform:rotate(30deg);animation-delay:-0.833s"></i><i style="transform:rotate(60deg);animation-delay:-0.750s"></i><i style="transform:rotate(90deg);animation-delay:-0.667s"></i><i style="transform:rotate(120deg);animation-delay:-0.583s"></i><i style="transform:rotate(150deg);animation-delay:-0.500s"></i><i style="transform:rotate(180deg);animation-delay:-0.417s"></i><i style="transform:rotate(210deg);animation-delay:-0.333s"></i><i style="transform:rotate(240deg);animation-delay:-0.250s"></i><i style="transform:rotate(270deg);animation-delay:-0.167s"></i><i style="transform:rotate(300deg);animation-delay:-0.083s"></i><i style="transform:rotate(330deg);animation-delay:0.000s"></i></span>
         <span class="live-label" id="liveLabel">Live</span>
         <span class="live-time" id="liveTime"></span>
       </div>
@@ -685,7 +738,7 @@ body.client-mode .nav-scrim{display:none !important}
   <div id="creativeView" style="display:none">
 <div id="cr_dashboard" class="cr-dashboard">
 <div class="cr-toolbar">
-  <div class="cr-sub" id="cr_headerSub">Loading…</div>
+  <div class="cr-sub"><span id="cr_crBusy" class="ios-spinner hidden" aria-hidden="true"><i style="transform:rotate(0deg);animation-delay:-0.917s"></i><i style="transform:rotate(30deg);animation-delay:-0.833s"></i><i style="transform:rotate(60deg);animation-delay:-0.750s"></i><i style="transform:rotate(90deg);animation-delay:-0.667s"></i><i style="transform:rotate(120deg);animation-delay:-0.583s"></i><i style="transform:rotate(150deg);animation-delay:-0.500s"></i><i style="transform:rotate(180deg);animation-delay:-0.417s"></i><i style="transform:rotate(210deg);animation-delay:-0.333s"></i><i style="transform:rotate(240deg);animation-delay:-0.250s"></i><i style="transform:rotate(270deg);animation-delay:-0.167s"></i><i style="transform:rotate(300deg);animation-delay:-0.083s"></i><i style="transform:rotate(330deg);animation-delay:0.000s"></i></span> <span id="cr_headerSub">Loading…</span></div>
   <div class="cr-toolbar-actions">
     <a id="cr_exportBtn" class="btn-ghost" href="#" title="Download the ads table as CSV">Export CSV</a>
     <button id="cr_syncBtn" class="btn-ghost cr-admin" title="Pull fresh data from Meta">Sync Meta</button>
@@ -811,7 +864,7 @@ body.client-mode .nav-scrim{display:none !important}
   <div id="cr_plannedModal" class="drawer hidden">
     <div class="drawer-backdrop" id="cr_plannedBackdrop"></div>
     <div class="cr-modal">
-      <div class="drawer-head"><h3>Log a creative</h3><button id="cr_plannedClose" class="btn-icon" title="Close">✕</button></div>
+      <div class="drawer-head"><h3>Log a creative</h3><button id="cr_plannedClose" class="btn-icon" title="Close" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
       <form id="cr_plannedForm" class="tag-form">
         <label>Ad name (use the naming convention so tags fill themselves)
           <input name="name" placeholder="Heygen UGC | HOA ANGLE | HOA CANT STOP YOU HOOK | V10" required></label>
@@ -846,7 +899,7 @@ body.client-mode .nav-scrim{display:none !important}
           <h3 id="cr_drawerTitle"></h3>
           <div class="muted small" id="cr_drawerMeta"></div>
         </div>
-        <button id="cr_drawerClose" class="btn-icon" title="Close">✕</button>
+        <button id="cr_drawerClose" class="btn-icon" title="Close" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
       <div class="drawer-body">
         <div class="drawer-grid">
@@ -918,7 +971,7 @@ function toLogin() {
 function applyThemeButton() {
   const t = document.documentElement.getAttribute('data-theme') || 'light';
   const b = document.getElementById('themeBtn');
-  if (b) b.textContent = t === 'dark' ? 'Light' : 'Dark';
+  if (b) { b.innerHTML = `<svg class="ico"><use href="#${t === 'dark' ? 'i-sun' : 'i-moon'}"/></svg>`; b.title = t === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'; b.setAttribute('aria-label', b.title); }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', t === 'dark' ? '#000000' : '#ffffff');
 }
@@ -927,9 +980,36 @@ function toggleTheme() {
   document.documentElement.setAttribute('data-theme', next);
   try { localStorage.setItem('theme', next); } catch (e) { /* private mode */ }
   applyThemeButton();
+
   if (window.Creative && window.Creative.refresh) window.Creative.refresh();
 }
 applyThemeButton();
+// ── Sidebar rail ──
+// Collapses the account list to a narrow rail of initials on desktop. Remembered per browser.
+function applySidebar() {
+  const collapsed = localStorage.getItem('sidebar') === 'collapsed';
+  document.body.classList.toggle('side-collapsed', collapsed);
+  const b = document.getElementById('sideToggle');
+  if (b) { b.innerHTML = `<svg class="ico"><use href="#${collapsed ? 'i-expand' : 'i-collapse'}"/></svg>`; b.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar'; b.setAttribute('aria-label', b.title); }
+}
+function toggleSidebar() {
+  try { localStorage.setItem('sidebar', document.body.classList.contains('side-collapsed') ? 'expanded' : 'collapsed'); } catch (e) { /* private mode */ }
+  applySidebar();
+}
+applySidebar();
+
+// ── Loading states ──
+const SPINNER_HTML = '<span class="ios-spinner" aria-hidden="true">' + Array.from({ length: 12 }, (_, i) => `<i style="transform:rotate(${i * 30}deg);animation-delay:${(-(11 - i) / 12).toFixed(3)}s"></i>`).join('') + '</span>';
+function skLine(w, h) { return `<span class="sk" style="width:${w};height:${h || 12}px"></span>`; }
+// Skeleton of the page shape while the first fetch (or a workspace switch) is in flight.
+function renderSkeleton() {
+  document.getElementById('alerts').innerHTML = '';
+  document.getElementById('summary').innerHTML = Array.from({ length: 4 }, () =>
+    `<div class="stat skel"><div class="stat-label">${skLine('60%', 10)}</div><div class="stat-val">${skLine('75%', 20)}</div></div>`).join('');
+  document.getElementById('geoCards').innerHTML = Array.from({ length: 2 }, () =>
+    `<div class="geo-card skel">${skLine('40%', 16)}${skLine('100%', 5)}${skLine('55%', 10)}<div class="metrics">${Array.from({ length: 6 }, () => `<div class="metric">${skLine('50%', 10)}${skLine('70%', 16)}</div>`).join('')}</div></div>`).join('');
+}
+
 
 async function doSignOut() {
   try {
@@ -989,7 +1069,9 @@ function renderSidebar() {
     const pct = Math.round(w.pctSpent || 0);
     const cls = pct >= 95 ? 'danger' : pct >= 80 ? 'warn' : '';
     const active = w.id === currentWorkspace ? ' active' : '';
+    const initials = w.name.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
     return `<button class="ws-row${active}" data-ws="${esc(w.id)}" title="${esc(w.name)}">
+      <span class="ws-initial">${esc(initials)}</span>
       <div class="ws-name"><span>${esc(w.name)}</span><span class="ws-count">${w.geoCount}</span></div>
       <div class="ws-meta">${Math.round(w.spent).toLocaleString()} / ${Math.round(w.budget).toLocaleString()} · ${pct}%</div>
       <div class="ws-bar"><span class="${cls}" style="width:${Math.min(100, pct)}%"></span></div>
@@ -1008,6 +1090,7 @@ async function switchWorkspace(id) {
   currentWorkspace = id;
   localStorage.setItem('ws', id);
   renderSidebar();
+  renderSkeleton();
   await loadData();
   await syncViewTabs();
 }
@@ -1635,17 +1718,20 @@ async function fetchDashboard() {
 async function doRefresh() {
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true;
-  btn.textContent = 'Pulling data...';
+  btn.innerHTML = SPINNER_HTML;
   setLiveState('loading', 'Fetching…');
   try {
     await fetch(`${API_BASE}/api/refresh`, { method: 'POST', credentials: 'same-origin' });
     await loadData();
+    // updateLiveBadge() leaves a 'loading' badge alone, so clear it here or it stays on "Fetching…".
+    setLiveState('live', 'Live');
+    updateLiveBadge();
   } catch (e) {
     console.error(e);
     setLiveState('dead', 'Failed');
   }
   btn.disabled = false;
-  btn.textContent = 'Refresh live data';
+  btn.innerHTML = '<svg class="ico"><use href="#i-refresh"/></svg>';
 }
 
 function relativeTime(ts) {
@@ -1993,6 +2079,10 @@ async function init() {
   const who = await fetchMe();
   if (who) me = who;
   applyRole();
+  // Show the page shape at once; the numbers fill in when the fetch lands.
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'flex';
+  renderSkeleton();
   const budgetNote = document.getElementById('footerBudgetNote');
   if (budgetNote && !isAdminUser()) budgetNote.style.display = 'none';
 

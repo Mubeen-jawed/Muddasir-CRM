@@ -8,6 +8,20 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', paused: 'Paused', winning: 'Winning batch', retired: 'Retired' };
+  const ICONS = {
+    download: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+    refresh: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
+  };
+  const SPINNER_HTML = '<span class="ios-spinner" aria-hidden="true">' + Array.from({ length: 12 }, (_, i) => `<i style="transform:rotate(${i * 30}deg);animation-delay:${(-(11 - i) / 12).toFixed(3)}s"></i>`).join('') + '</span>';
+  const skLine = (w, h) => `<span class="sk" style="width:${w};height:${h || 12}px"></span>`;
+  // Page shape while the first load (or a scope change) is in flight.
+  function renderSkeleton() {
+    $('#cr_kpiRow').innerHTML = Array.from({ length: 8 }, () => `<div class="kpi-card"><div class="kpi-label">${skLine('55%', 10)}</div><div class="kpi-value">${skLine('70%', 22)}</div></div>`).join('');
+    const rows = (n, cols) => `<tbody>${Array.from({ length: n }, () => `<tr>${Array.from({ length: cols }, () => `<td>${skLine('80%')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    for (const [id, cols] of [['#cr_anglesTable', 8], ['#cr_hooksTable', 8], ['#cr_countiesTable', 8], ['#cr_adsTable', 9]]) { const el = $(id); if (el && !el.querySelector('tbody tr[data-key], tbody tr[data-ad], tbody tr[data-geo]')) el.innerHTML = rows(6, cols); }
+  }
+  function setBusy(on) { const b = $('#cr_crBusy'); if (b) b.classList.toggle('hidden', !on); }
+
   const state = { workspace: null, enabled: false, scope: 'all', geo: '', days: 30, tab: 'angles', data: null, config: null, sort: {}, adFilter: { q: '', status: '', verdict: '', untagged: false, angle: null, hook: null, format: null }, drawerAd: null, tags: null };
 
   // ── API ──
@@ -52,6 +66,8 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
   }
 
   async function refresh() {
+    if (!state.data) renderSkeleton();
+    setBusy(true);
     $$('#cr_scopeSeg button').forEach(b => b.classList.toggle('cr-active', b.dataset.scope === state.scope));
     $$('#cr_rangeSeg button').forEach(b => b.classList.toggle('cr-active', parseInt(b.dataset.days, 10) === state.days));
     $$('#cr_geoSeg button').forEach(b => b.classList.toggle('cr-active', b.dataset.geo === state.geo));
@@ -64,6 +80,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
       fillDatalists();
       renderAll();
     } catch (err) { if (err.message !== 'unauthorized') toast('Error: ' + err.message); }
+    finally { setBusy(false); }
   }
 
   function fillDatalists() {
@@ -382,10 +399,11 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
   }
 
   async function runSync() {
+    const sb = $('#cr_syncBtn'); if (sb) sb.innerHTML = SPINNER_HTML + 'Syncing';
     try { await api('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); toast('Sync started — refreshing in a bit'); }
     catch (err) { toast(err.message, 5000); return; }
     const poll = setInterval(async () => {
-      try { const s = await api('/api/sync'); if (!s.running) { clearInterval(poll); toast(`Sync ${s.last?.status || 'done'}: ${s.last?.rows ?? 0} rows`); await loadConfig(); await refresh(); } } catch { clearInterval(poll); }
+      try { const s = await api('/api/sync'); if (!s.running) { clearInterval(poll); toast(`Sync ${s.last?.status || 'done'}: ${s.last?.rows ?? 0} rows`); await loadConfig(); await refresh(); if (sb) sb.innerHTML = ICONS.refresh + 'Sync'; } } catch { clearInterval(poll); if (sb) sb.innerHTML = ICONS.refresh + 'Sync'; }
     }, 4000);
   }
 
@@ -440,6 +458,8 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlanned(); });
   $('#cr_syncBtn').onclick = runSync;
 
+  const ex = $('#cr_exportBtn'); if (ex) ex.innerHTML = ICONS.download + 'Export';
+  const sy = $('#cr_syncBtn'); if (sy) sy.innerHTML = ICONS.refresh + 'Sync';
   // ── Public API used by the CRM page ──
   // Creative.setWorkspace(id) -> resolves to true when the workspace has creative tracking, false otherwise.
   let loadedFor = null;
