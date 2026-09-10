@@ -41,7 +41,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
     seg.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.scope = b.dataset.scope; refresh(); };
     const gseg = $('#cr_geoSeg');
     gseg.innerHTML = `<button data-geo="" class="${state.geo === '' ? 'cr-active' : ''}">All counties</button>` +
-      (state.config.geos || []).map(g => `<button data-geo="${esc(g.id)}" class="${state.geo === g.id ? 'cr-active' : ''}"><span class="dot" style="background:${esc(g.color || '#888')}"></span>${esc(g.short)}</button>`).join('');
+      (state.config.geos || []).map(g => `<button data-geo="${esc(g.id)}" class="${state.geo === g.id ? 'cr-active' : ''}">${esc(g.short)}</button>`).join('');
     gseg.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.geo = b.dataset.geo; refresh(); };
     $('#cr_plannedAccount').innerHTML = state.config.accounts.filter(a => a.active !== false).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
     const last = state.config.last_sync;
@@ -165,7 +165,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
     const rows = [...d.geos].sort((a, b) => b.spend - a.spend);
     const cols = ['County', 'Verdict', 'Ads', 'Spend', 'Leads', 'CPL', 'CTR', 'CPM', 'Hook %', 'LPV→Lead', 'Top angle (by CPL)', 'Best ad'];
     const tr = rows.map(g => `<tr data-geo="${esc(g.key ?? 'none')}">
-      <td class="name"><span class="dot" style="background:${esc(g.color || '#666')}"></span><b>${esc(g.label)}</b><span class="cr-sub">${g.active_ads} active · ${g.winners} winner${g.winners === 1 ? '' : 's'} · ${g.losers} loser${g.losers === 1 ? '' : 's'}</span></td>
+      <td class="name"><b>${esc(g.label)}</b><span class="cr-sub">${g.active_ads} active · ${g.winners} winner${g.winners === 1 ? '' : 's'} · ${g.losers} loser${g.losers === 1 ? '' : 's'}</span></td>
       <td>${badge(g.key ? g.verdict : 'untagged')}</td>
       <td class="num">${g.ads}</td>
       <td class="num">${fmtM(g.spend)}${trend(g.spend, g.prior?.spend, false)}</td>
@@ -226,7 +226,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
       <td>${tagHtml(a.angle, a.tag_source === 'manual')}</td>
       <td>${tagHtml(a.hook, a.tag_source === 'manual')}</td>
       <td>${a.format ? `<span class="tag">${esc(a.format)}</span>` : `<span class="tag none">${esc(a.media_type || '?')}</span>`}</td>
-      <td><span class="status ${esc(a.effective_status || '')}">${esc((a.effective_status || '—').replace(/_/g, ' '))}</span> ${a.stage ? stagePill(a.stage_effective) : ''}${a.fatigue.length ? `<span class="cr-sub fatigue" title="${esc(a.fatigue.join('\n'))}">⚠ ${esc(a.fatigue[0])}</span>` : ''}</td>
+      <td><span class="status ${esc(a.effective_status || '')}">${esc((a.effective_status || '—').replace(/_/g, ' '))}</span> ${a.stage ? stagePill(a.stage_effective) : ''}${a.fatigue.length ? `<span class="cr-sub fatigue" title="${esc(a.fatigue.join('\n'))}">Fatigue: ${esc(a.fatigue[0])}</span>` : ''}</td>
       <td class="num">${fmtM(a.spend)}</td>
       <td class="num">${fmtN(a.leads)}</td>
       <td class="num"><span class="cell ${cplClass(a.cpl, target)}">${fmtM(a.cpl, 2)}</span>${trend(a.cpl, a.prior?.cpl)}</td>
@@ -266,7 +266,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
   }
 
   function stagePill(st) { return `<span class="stage-pill ${esc(st)}">${esc(STAGE_LABELS[st] || st)}</span>`; }
-  function driveLink(url) { return url ? `<a class="drive" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">▣ Drive</a>` : ''; }
+  function driveLink(url) { return url ? `<a class="drive" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Drive</a>` : ''; }
 
   function renderPipeline() {
     const d = state.data, target = d.client.cpl_target;
@@ -283,7 +283,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
         <div class="tags">${c.angle ? `<span class="tag">${esc(c.angle)}</span>` : '<span class="tag none">no angle</span>'}${c.hook ? `<span class="tag">${esc(c.hook)}</span>` : ''}${c.format ? `<span class="tag">${esc(c.format)}</span>` : ''}</div>
         ${c.hypothesis ? `<div class="hyp" title="${esc(c.hypothesis)}">${esc(c.hypothesis)}</div>` : ''}
         ${c.spend ? `<div class="nums"><span>Spend <b>${fmtM(c.spend)}</b></span><span>Leads <b>${fmtN(c.leads)}</b></span><span>CPL <b class="cell ${cplClass(c.cpl, target)}" style="padding:0 4px">${fmtM(c.cpl, 2)}</b></span></div>` : ''}
-        ${c.spend ? `<div>${badge(c.verdict)}${c.fatigue && c.fatigue.length ? ` <span class="fatigue">⚠ ${esc(c.fatigue[0])}</span>` : ''}</div>` : ''}
+        ${c.spend ? `<div>${badge(c.verdict)}${c.fatigue && c.fatigue.length ? ` <span class="fatigue">Fatigue: ${esc(c.fatigue[0])}</span>` : ''}</div>` : ''}
       </div>`).join('');
       return `<div class="col ${st}"><div class="col-head"><span>${esc(STAGE_LABELS[st])}</span><span class="pill">${list.length}</span></div>${cards || '<div class="more">—</div>'}${list.length > LIMIT ? `<div class="more">+${list.length - LIMIT} more (use the Ads tab)</div>` : ''}</div>`;
     });
@@ -343,17 +343,20 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
     const c = $('#cr_drawerChart'); const ctx = c.getContext('2d');
     const W = c.width = c.clientWidth * devicePixelRatio, H = c.height = 120 * devicePixelRatio;
     ctx.clearRect(0, 0, W, H);
-    if (!daily.length) { ctx.fillStyle = '#6a6a7a'; ctx.font = `${12 * devicePixelRatio}px sans-serif`; ctx.fillText('No daily data in range', 12 * devicePixelRatio, H / 2); return; }
+    if (!daily.length) { ctx.fillStyle = (getComputedStyle(c).getPropertyValue('--text-muted') || '#6a6a7a').trim(); ctx.font = `${12 * devicePixelRatio}px sans-serif`; ctx.fillText('No daily data in range', 12 * devicePixelRatio, H / 2); return; }
+    const cs = getComputedStyle(c);
+    const tone = (v, fb) => (cs.getPropertyValue(v) || '').trim() || fb;
+    const spendColor = tone('--border', '#2a2a36'), leadColor = tone('--accent', '#3b82f6'), cplColor = tone('--text-primary', '#f0f0f5');
     const pad = 8 * devicePixelRatio, n = daily.length, bw = (W - pad * 2) / n;
     const maxSpend = Math.max(...daily.map(d => d.spend), 1), maxLeads = Math.max(...daily.map(d => d.leads), 1);
     const cpls = daily.map(d => d.cpl).filter(v => v != null), maxCpl = Math.max(...cpls, 1);
     daily.forEach((d, i) => {
       const h = (d.spend / maxSpend) * (H - pad * 2);
-      ctx.fillStyle = 'rgba(154,154,168,.35)'; ctx.fillRect(pad + i * bw + 1, H - pad - h, Math.max(bw - 2, 1), h);
+      ctx.fillStyle = spendColor; ctx.fillRect(pad + i * bw + 1, H - pad - h, Math.max(bw - 2, 1), h);
       const lh = (d.leads / maxLeads) * (H - pad * 2);
-      ctx.fillStyle = 'rgba(245,166,35,.85)'; ctx.fillRect(pad + i * bw + bw * 0.3, H - pad - lh, Math.max(bw * 0.4, 1), lh);
+      ctx.fillStyle = leadColor; ctx.fillRect(pad + i * bw + bw * 0.3, H - pad - lh, Math.max(bw * 0.4, 1), lh);
     });
-    ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 1.5 * devicePixelRatio; ctx.beginPath(); let started = false;
+    ctx.strokeStyle = cplColor; ctx.lineWidth = 1.5 * devicePixelRatio; ctx.beginPath(); let started = false;
     daily.forEach((d, i) => { if (d.cpl == null) { started = false; return; } const x = pad + i * bw + bw / 2, y = H - pad - (d.cpl / maxCpl) * (H - pad * 2); if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y); });
     ctx.stroke();
   }
