@@ -883,3 +883,18 @@ poll remains as a fallback for proxies that drop long connections.
 
 Behind Nginx the `/api/events` location must be proxied unbuffered — see `nginx.conf` (`proxy_buffering off`,
 `proxy_read_timeout 1h`).
+
+---
+
+## Campaign drill-down
+
+Every row in a county card's campaign breakdown opens a modal with the campaign's daily series
+(`GET /api/campaign/:id?days=90`, scoped to the login's workspaces and cached 15 minutes per campaign):
+
+- **Spend per day** — bars, with the campaign's daily budget as a dashed line when Meta has one.
+- **Budget pace** — cumulative spend against a straight even-pace line (to the daily budget × days when set).
+- **Leads per day** — bars, with cost per lead as dots on its own scale.
+- **Click-through rate** — line with dots, impressions as faint bars behind.
+
+Charts are drawn on canvas in the theme's text colour (black on light, white on dark) with no library.
+A This month / 30 days / 90 days switch changes the window; the strip above shows the totals for it.

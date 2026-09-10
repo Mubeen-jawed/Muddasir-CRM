@@ -1009,6 +1009,106 @@ const creativeRouter = creative.createCreativeRouter({
 });
 app.use("/api/creative", creativeRouter);
 
+// ── Campaign detail: daily series for the drill-down charts ──
+// Scoped like everything else: the campaign must sit in a geo of a workspace
+// the login can see (looked up in the cached categorisation). Meta is asked
+// for day-by-day insights + the campaign's own budget; answers are cached
+// for 15 minutes per campaign so opening a modal twice costs one API call.
+const campaignCache = new Map();
+const CAMPAIGN_CACHE_MS = 15 * 60 * 1000;
+
+function leadsFromActions(actions) {
+  if (!Array.isArray(actions)) return 0;
+  const by = {};
+  actions.forEach((a) => { if (a && a.action_type) by[a.action_type] = parseFloat(a.value || 0); });
+  return by.lead || by["offsite_conversion.fb_pixel_lead"] || by.onsite_web_lead || by["onsite_conversion.lead_grouped"] || 0;
+}
+
+function findCampaignGeo(campaignId) {
+  if (!cachedData) return null;
+  for (const geo of getAllGeos()) {
+    const d = cachedData[geo.id];
+    if (!d) continue;
+    const camp = (d.campaigns || []).find((c) => String(c.campaignId) === String(campaignId));
+    if (camp) return { geo, camp };
+  }
+  return null;
+}
+
+async function metaGetJson(url) {
+  const response = await fetch(url);
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !body || body.error) {
+    throw new Error((body && body.error && body.error.message) || `Meta HTTP ${response.status}`);
+  }
+  return body;
+}
+
+async function fetchCampaignDaily(campaignId, since, until) {
+  const key = `${campaignId}:${since}:${until}`;
+  const hit = campaignCache.get(key);
+  if (hit && Date.now() - hit.at < CAMPAIGN_CACHE_MS) return hit.data;
+
+  const base = `https://graph.facebook.com/${META_API_VERSION}/${campaignId}`;
+  const [meta, insights] = await Promise.all([
+    metaGetJson(`${base}?${new URLSearchParams({ fields: "name,status,effective_status,objective,daily_budget,lifetime_budget,start_time", access_token: META_ACCESS_TOKEN })}`),
+    metaGetJson(`${base}/insights?${new URLSearchParams({
+      time_range: JSON.stringify({ since, until }),
+      time_increment: "1",
+      fields: "date_start,spend,impressions,clicks,reach,frequency,actions",
+      limit: "100",
+      access_token: META_ACCESS_TOKEN,
+    })}`),
+  ]);
+
+  const days = (insights.data || []).map((r) => {
+    const spend = parseFloat(r.spend || 0);
+    const impressions = parseInt(r.impressions || 0, 10);
+    const clicks = parseInt(r.clicks || 0, 10);
+    const leads = leadsFromActions(r.actions);
+    return {
+      date: r.date_start, spend, impressions, clicks, leads,
+      reach: parseInt(r.reach || 0, 10), frequency: parseFloat(r.frequency || 0),
+      ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+      cpl: leads > 0 ? spend / leads : null,
+    };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Budgets come back in minor units (cents).
+  const data = {
+    campaign: {
+      id: campaignId, name: meta.name, status: meta.effective_status || meta.status, objective: meta.objective || null,
+      dailyBudget: meta.daily_budget ? parseInt(meta.daily_budget, 10) / 100 : null,
+      lifetimeBudget: meta.lifetime_budget ? parseInt(meta.lifetime_budget, 10) / 100 : null,
+      startTime: meta.start_time || null,
+    },
+    days,
+  };
+  campaignCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+app.get("/api/campaign/:id", async (req, res) => {
+  const found = findCampaignGeo(req.params.id);
+  if (!found) return res.status(404).json({ error: "Campaign not on the dashboard" });
+  if (!canSeeWorkspace(req, found.geo.workspace)) return res.status(403).json({ error: "Not your account" });
+  const daysBack = Math.min(90, Math.max(7, parseInt(req.query.days || "30", 10) || 30));
+  const until = new Date();
+  const since = new Date(until); since.setUTCDate(since.getUTCDate() - (daysBack - 1));
+  const iso = (d) => d.toISOString().slice(0, 10);
+  try {
+    const data = await fetchCampaignDaily(req.params.id, iso(since), iso(until));
+    res.json({
+      ...data,
+      geo: { id: found.geo.id, name: found.geo.name, budget: getEffectiveBudget(found.geo.id), workspace: found.geo.workspace },
+      account: found.camp.account,
+      month: { start: iso(new Date(Date.UTC(until.getUTCFullYear(), until.getUTCMonth(), 1))), daysInMonth: getDaysInMonth() },
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // GET /api/events — server-sent events: one line per completed update, plus a
 // heartbeat so proxies keep the connection open. Behind Nginx this needs
 // proxy_buffering off (see nginx.conf).
