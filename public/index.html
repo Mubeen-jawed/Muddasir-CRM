@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
-<title>Ben ADU — Budget Pacing</title>
+<title>Ben ADU — Dashboard</title>
+<link rel="stylesheet" href="/creative.css">
 <style>
 /* ── Design tokens ── */
 :root{
@@ -368,6 +369,13 @@ body.client-mode .nav-scrim{display:none !important}
 .budget-edit input:focus{outline:none;border-color:var(--info)}
 
 /* ── Footer ── */
+
+/* ── View tabs (Budget pacing / Creative performance) ── */
+.view-tabs{display:none;gap:4px;border-bottom:1px solid var(--line);margin:-8px 0 20px}
+.view-tabs.show{display:flex}
+.view-tabs button{background:transparent;border:none;color:var(--muted);padding:10px 16px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit}
+.view-tabs button:hover{color:var(--text)}
+.view-tabs button.active{color:#f5a623;border-bottom-color:#f5a623}
 .footer{margin-top:24px;padding:14px 18px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft);font-size:12px;color:var(--faint);line-height:1.6}
 .footer strong{color:var(--muted);font-weight:600}
 
@@ -607,6 +615,12 @@ body.client-mode .nav-scrim{display:none !important}
     </div>
   </div>
 
+  <nav class="view-tabs" id="viewTabs" aria-label="Dashboard views">
+    <button type="button" data-view="budget" class="active">Budget pacing</button>
+    <button type="button" data-view="creative">Creative performance</button>
+  </nav>
+
+  <div id="budgetView">
   <div id="alerts"></div>
   <div class="summary" id="summary"></div>
   <div class="geo-grid" id="geoCards"></div>
@@ -618,6 +632,224 @@ body.client-mode .nav-scrim{display:none !important}
     <span id="footerBudgetNote">To change a county's monthly budget, click <em>Edit budget</em> — the new number is saved permanently and used for all future calculations.</span>
     Hover any metric (the small <strong>?</strong> icon) to see exactly what it means.
   </div>
+  </div><!-- /budgetView -->
+
+  <div id="creativeView" style="display:none">
+<div id="cr_dashboard" class="cr-dashboard">
+<div class="cr-toolbar">
+  <div class="cr-sub" id="cr_headerSub">Loading…</div>
+  <div class="cr-toolbar-actions">
+    <a id="cr_exportBtn" class="btn-ghost" href="#" title="Download the ads table as CSV">Export CSV</a>
+    <button id="cr_syncBtn" class="btn-ghost cr-admin" title="Pull fresh data from Meta">Sync Meta</button>
+  </div>
+</div>
+<div class="controls">
+      <div class="seg" id="cr_scopeSeg"></div>
+      <div class="seg" id="cr_geoSeg" title="County — same rules as the spending tracker"></div>
+      <div class="seg" id="cr_rangeSeg">
+        <button data-days="7">7d</button>
+        <button data-days="14">14d</button>
+        <button data-days="30" class="cr-active">30d</button>
+        <button data-days="60">60d</button>
+        <button data-days="90">90d</button>
+        <button data-days="0">All</button>
+      </div>
+      <div class="range-label" id="cr_rangeLabel"></div>
+    </div>
+
+    <div class="kpi-row" id="cr_kpiRow"></div>
+
+    <nav class="tabs" id="cr_tabs">
+      <button data-tab="angles" class="cr-active">Angles</button>
+      <button data-tab="counties">Counties</button>
+      <button data-tab="hooks">Hooks</button>
+      <button data-tab="formats">Formats</button>
+      <button data-tab="ads">Ads <span class="pill" id="cr_adsCount"></span></button>
+      <button data-tab="matrix">Matrix</button>
+      <button data-tab="pipeline">Pipeline <span class="pill" id="cr_pipelineCount"></span></button>
+    </nav>
+
+    <section id="cr_tab-angles" class="tab-panel">
+      <div class="panel-head">
+        <h2>Angles ranked by spend</h2>
+        <p class="muted">Verdicts compare CPL to the client target after minimum spend. Click a row to see its ads.</p>
+      </div>
+      <div class="table-wrap"><table class="grid" id="cr_anglesTable"></table></div>
+    </section>
+
+    <section id="cr_tab-counties" class="tab-panel hidden">
+      <div class="panel-head">
+        <h2>By county</h2>
+        <p class="muted">LA County = FL account (excl. "Pacific") + Pacific campaigns tagged LA · OC / SJ = Pacific campaigns tagged OC / SJ · Outdoor = Green V2. Click a row to filter every tab to that county.</p>
+      </div>
+      <div class="table-wrap"><table class="grid" id="cr_countiesTable"></table></div>
+    </section>
+
+    <section id="cr_tab-hooks" class="tab-panel hidden">
+      <div class="panel-head">
+        <h2>Hooks</h2>
+        <p class="muted">Hook rate = viewers who watched the first 25% ÷ impressions (Meta's API no longer returns 3-second plays). Hold rate = ThruPlay (15s or full) ÷ those hook views. Benchmark: <span class="cell vid good" style="padding:0 6px">≥30% good</span> <span class="cell vid cr-warn" style="padding:0 6px">25–30% near</span> <span class="cell vid bad" style="padding:0 6px">&lt;25% poor</span> — thresholds live in config/accounts.json.</p>
+      </div>
+      <div class="table-wrap"><table class="grid" id="cr_hooksTable"></table></div>
+    </section>
+
+    <section id="cr_tab-formats" class="tab-panel hidden">
+      <div class="two-col">
+        <div>
+          <div class="panel-head"><h2>Creative format</h2></div>
+          <div class="table-wrap"><table class="grid" id="cr_formatsTable"></table></div>
+        </div>
+        <div>
+          <div class="panel-head"><h2>Media type</h2></div>
+          <div class="table-wrap"><table class="grid" id="cr_mediaTable"></table></div>
+          <div class="panel-head" style="margin-top:20px"><h2>Language</h2></div>
+          <div class="table-wrap"><table class="grid" id="cr_langTable"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cr_tab-ads" class="tab-panel hidden">
+      <div class="panel-head row">
+        <h2>Ads</h2>
+        <div class="filters">
+          <input type="search" id="cr_adSearch" placeholder="Search name, angle, hook…">
+          <select id="cr_adStatus">
+            <option value="">Any status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="PAUSED">Paused</option>
+            <option value="other">Other</option>
+          </select>
+          <select id="cr_adVerdict">
+            <option value="">Any verdict</option>
+            <option value="winner">Winner</option>
+            <option value="promising">Promising</option>
+            <option value="testing">Testing</option>
+            <option value="underperforming">Underperforming</option>
+            <option value="loser">Loser</option>
+          </select>
+          <label class="chk"><input type="checkbox" id="cr_adUntagged"> Untagged only</label>
+          <button id="cr_clearFilters" class="btn-ghost small">Clear</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table class="grid" id="cr_adsTable"></table></div>
+    </section>
+
+    <section id="cr_tab-matrix" class="tab-panel hidden">
+      <div class="panel-head row">
+        <h2>Matrix</h2>
+        <div class="filters">
+          <select id="cr_matrixRows"><option value="angle">Angle</option><option value="hook">Hook</option><option value="format">Format</option><option value="language">Language</option><option value="geo">County</option></select>
+          <span class="muted">×</span>
+          <select id="cr_matrixCols"><option value="format">Format</option><option value="geo">County</option><option value="hook">Hook</option><option value="media_type">Media type</option><option value="language">Language</option></select>
+        </div>
+      </div>
+      <p class="muted">Cell = CPL (leads). Green ≤ target, amber ≤ 1.5× target, red above. Grey = spend without leads.</p>
+      <div class="table-wrap"><table class="grid matrix" id="cr_matrixTable"></table></div>
+    </section>
+
+    <section id="cr_tab-pipeline" class="tab-panel hidden">
+      <div class="panel-head row">
+        <div>
+          <h2>Creative pipeline</h2>
+          <p class="muted">Log a creative before it launches, keep the Drive link and the hypothesis with it, then link it to the Meta ad once it's live. Stage is set by hand; ads without one are placed by their Meta status.</p>
+        </div>
+        <button id="cr_addPlannedBtn" class="auth-btn small">+ Log a creative</button>
+      </div>
+      <div class="board" id="cr_pipelineBoard"></div>
+    </section>
+
+
+  <!-- New planned creative -->
+  <div id="cr_plannedModal" class="drawer hidden">
+    <div class="drawer-backdrop" id="cr_plannedBackdrop"></div>
+    <div class="cr-modal">
+      <div class="drawer-head"><h3>Log a creative</h3><button id="cr_plannedClose" class="btn-icon" title="Close">✕</button></div>
+      <form id="cr_plannedForm" class="tag-form">
+        <label>Ad name (use the naming convention so tags fill themselves)
+          <input name="name" placeholder="Heygen UGC | HOA ANGLE | HOA CANT STOP YOU HOOK | V10" required></label>
+        <div class="tag-row two">
+          <label>Account <select name="account_id" id="cr_plannedAccount"></select></label>
+          <label>Stage <select name="stage"><option value="idea">Idea</option><option value="production">In production</option></select></label>
+        </div>
+        <div class="tag-row two">
+          <label>Angle <input name="angle" list="cr_angleList" autocomplete="off"></label>
+          <label>Hook <input name="hook" list="cr_hookList" autocomplete="off"></label>
+        </div>
+        <div class="tag-row">
+          <label>Format <input name="format" list="cr_formatList" autocomplete="off"></label>
+          <label>Media <select name="media_type"><option value="">—</option><option value="video">Video</option><option value="image">Image</option><option value="carousel">Carousel</option></select></label>
+          <label>Lang <input name="language" list="cr_langList" maxlength="3" autocomplete="off"></label>
+          <label>Ver <input name="version" type="number" min="0"></label>
+        </div>
+        <label>Hypothesis — what is this testing? <textarea name="hypothesis" rows="2" placeholder="e.g. HOA objection removal beats the rent angle for 45+ homeowners"></textarea></label>
+        <label>Drive folder / file <input name="drive_url" type="url" placeholder="https://drive.google.com/…"></label>
+        <div class="tag-actions"><button type="submit" class="auth-btn small">Save to pipeline</button><span id="cr_plannedStatus" class="muted small"></span></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Ad drawer -->
+  <div id="cr_drawer" class="drawer hidden">
+    <div class="drawer-backdrop" id="cr_drawerBackdrop"></div>
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <div>
+          <div class="muted small" id="cr_drawerAccount"></div>
+          <h3 id="cr_drawerTitle"></h3>
+          <div class="muted small" id="cr_drawerMeta"></div>
+        </div>
+        <button id="cr_drawerClose" class="btn-icon" title="Close">✕</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-grid">
+          <div class="thumb-box" id="cr_drawerThumb"></div>
+          <div class="kpi-mini" id="cr_drawerKpis"></div>
+        </div>
+        <canvas id="cr_drawerChart" height="120"></canvas>
+        <div class="chart-legend"><span class="lg spend">Spend</span><span class="lg leads">Leads</span><span class="lg cpl">CPL</span></div>
+
+        <form id="cr_tagForm" class="tag-form">
+          <div class="tag-head"><h4>Creative tags</h4><span id="cr_tagSource" class="muted small"></span></div>
+          <label>Angle <input name="angle" list="cr_angleList" autocomplete="off"></label>
+          <label>Hook <input name="hook" list="cr_hookList" autocomplete="off"></label>
+          <div class="tag-row">
+            <label>Format <input name="format" list="cr_formatList" autocomplete="off"></label>
+            <label>Media
+              <select name="media_type"><option value="video">Video</option><option value="image">Image</option><option value="carousel">Carousel</option><option value="unknown">Unknown</option></select>
+            </label>
+            <label>Lang <input name="language" list="cr_langList" maxlength="3" autocomplete="off"></label>
+            <label>Ver <input name="version" type="number" min="0"></label>
+          </div>
+          <div class="tag-row two">
+            <label>Stage
+              <select name="stage"><option value="">Auto (from Meta status)</option><option value="idea">Idea</option><option value="production">In production</option><option value="live">Live</option><option value="paused">Paused</option><option value="winning">Winning batch</option><option value="retired">Retired</option></select>
+            </label>
+            <label>Drive folder / file <input name="drive_url" type="url" placeholder="https://drive.google.com/…"></label>
+          </div>
+          <label>Hypothesis — what is this testing? <textarea name="hypothesis" rows="2" placeholder="e.g. Cost objection removal vs rental income"></textarea></label>
+          <label>Notes / learnings <textarea name="notes" rows="2" placeholder="What did this test teach us?"></textarea></label>
+          <div class="tag-actions">
+            <button type="submit" class="auth-btn small">Save</button>
+            <button type="button" id="cr_tagReset" class="btn-ghost small">Re-parse from name</button>
+            <button type="button" id="cr_linkPlanned" class="btn-ghost small hidden">Link to Meta ad…</button>
+            <button type="button" id="cr_deletePlanned" class="btn-ghost small hidden">Delete</button>
+            <span id="cr_tagStatus" class="muted small"></span>
+          </div>
+        </form>
+
+        <div class="creative-text" id="cr_drawerCopy"></div>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="cr_angleList"></datalist>
+  <datalist id="cr_hookList"></datalist>
+  <datalist id="cr_formatList"></datalist>
+  <datalist id="cr_langList"><option value="EN"><option value="ES"></datalist>
+
+  <div id="cr_toast" class="toast hidden"></div>
+</div>
+  </div><!-- /creativeView -->
 </div>
 </div>
 
@@ -712,7 +944,45 @@ async function switchWorkspace(id) {
   localStorage.setItem('ws', id);
   renderSidebar();
   await loadData();
+  await syncViewTabs();
 }
+
+// ── Views: Budget pacing vs Creative performance ──
+// The Creative tab exists only for workspaces the creative tracker follows
+// (creative/config/accounts.json). The choice is remembered per browser.
+let currentView = localStorage.getItem('view') || 'budget';
+
+function showView(view) {
+  currentView = view;
+  localStorage.setItem('view', view);
+  document.querySelectorAll('#viewTabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('budgetView').style.display = view === 'budget' ? '' : 'none';
+  document.getElementById('creativeView').style.display = view === 'creative' ? '' : 'none';
+  const h1 = document.querySelector('.header h1');
+  if (h1) h1.textContent = view === 'creative' ? 'Creative performance' : 'Budget pacing';
+  const bar = document.querySelector('.topbar-title');
+  if (bar) bar.textContent = h1 ? h1.textContent : '';
+  const refresh = document.getElementById('refreshBtn');
+  if (refresh) refresh.style.display = view === 'creative' ? 'none' : '';
+  const badge = document.getElementById('liveBadge');
+  if (badge) badge.style.display = view === 'creative' ? 'none' : '';
+  const month = document.getElementById('monthLabel');
+  if (month) month.style.display = view === 'creative' ? 'none' : '';
+  if (view === 'creative' && window.Creative) window.Creative.refresh();
+}
+
+async function syncViewTabs() {
+  const tabs = document.getElementById('viewTabs');
+  const enabled = window.Creative ? await window.Creative.setWorkspace(currentWorkspace) : false;
+  tabs.classList.toggle('show', enabled);
+  if (!enabled && currentView === 'creative') return showView('budget');
+  showView(enabled ? currentView : 'budget');
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('#viewTabs button');
+  if (b) showView(b.dataset.view);
+});
 
 // Delegated so the rows survive every re-render without rebinding.
 document.addEventListener('click', (e) => {
@@ -1687,6 +1957,7 @@ async function init() {
     document.getElementById('dashboard').style.display = 'flex';
     render();
   }
+  await syncViewTabs();
 
   // Auto-refresh dashboard data every 5 minutes on the frontend
   setInterval(loadData, 5 * 60 * 1000);
@@ -1697,5 +1968,6 @@ async function init() {
 // Start
 init();
 </script>
+<script src="/creative.js"></script>
 </body>
 </html>

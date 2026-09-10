@@ -21,6 +21,7 @@ const {
 } = require("./config");
 const auth = require("./auth");
 const users = require("./users");
+const creative = require("./creative/router");
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -896,7 +897,7 @@ app.use((req, res, next) => {
   res.set(
     "Content-Security-Policy",
     "default-src 'self'; style-src 'self' 'unsafe-inline'; " +
-      "script-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+      "script-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.fbcdn.net https://*.facebook.com; " +
       "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
   );
   next();
@@ -983,6 +984,17 @@ app.use(express.static(path.join(__dirname, "public"), {
 
 
 // ── API Routes ──
+
+// Creative performance tracker (angles / hooks / counties) — /api/creative/*.
+// Same session, same workspace scoping as everything else; see creative/router.js.
+const creativeRouter = creative.createCreativeRouter({
+  canSeeWorkspace,
+  isAdmin,
+  getWorkspace,
+  visibleWorkspaces,
+  DEFAULT_WORKSPACE,
+});
+app.use("/api/creative", creativeRouter);
 
 // GET /api/workspaces — sidebar rows, with a live spend total per workspace.
 // A client gets only its own row(s); it never learns another client exists.
@@ -1538,6 +1550,15 @@ cron.schedule(
   { timezone: "America/New_York" }
 );
 
+// ── Cron: creative tracker sync (ad-level daily insights + creatives) ──
+const CREATIVE_SYNC_CRON = process.env.CREATIVE_SYNC_CRON === undefined ? "0 */3 * * *" : process.env.CREATIVE_SYNC_CRON;
+if (CREATIVE_SYNC_CRON && process.env.META_ACCESS_TOKEN) {
+  cron.schedule(CREATIVE_SYNC_CRON, () => {
+    console.log(`[CRON] Creative sync triggered`);
+    creativeRouter.runSync();
+  });
+}
+
 // ── Cron: token expiry check daily at 9 AM Pacific ──
 cron.schedule(
   "0 9 * * *",
@@ -1550,6 +1571,7 @@ cron.schedule(
 
 // ── Start server ──
 app.listen(PORT, async () => {
+  creative.ensureSeeded(creativeRouter);
   console.log(`\n========================================`);
   console.log(`  Ben ADU Budget Dashboard`);
   console.log(`  http://localhost:${PORT}`);

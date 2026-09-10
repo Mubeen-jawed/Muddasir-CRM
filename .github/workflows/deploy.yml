@@ -59,6 +59,8 @@ jobs:
           node --check auth.js
           node --check config.js
           node --check ecosystem.config.js
+          for f in creative/*.js creative/scripts/*.js; do node --check "$f"; done
+          node --check public/creative.js
           bash -n deploy.sh
           bash -n deploy-remote.sh
           bash -n scripts/vps-deploy.sh

@@ -830,3 +830,35 @@ pm2 restart ben-budget-dashboard    # Restart
 pm2 stop ben-budget-dashboard       # Stop
 pm2 delete ben-budget-dashboard     # Remove
 ```
+
+---
+
+## Creative performance tab
+
+Every workspace listed in `creative/config/accounts.json` gets a second tab at the top of its page:
+**Budget pacing** (this dashboard) and **Creative performance** (the creative tracker). Ben ADU is the
+first one. Other workspaces show no tab until their accounts are added to that file.
+
+What the tab shows, all pulled from the same `META_ACCESS_TOKEN`:
+
+- **Angles / Hooks / Formats** — spend, leads, CPL, CTR, hook rate, hold rate and a verdict
+  (winner / promising / testing / underperforming / loser) against the client's CPL target
+  (`creative/config/accounts.json` → `clients`).
+- **Counties** — the same geo rules as the budget cards (`config.js`), so LA / OC / SJ / Outdoor match.
+- **Ads** — every ad with its tags, fatigue flags, thumbnail, primary text and a tag editor.
+- **Pipeline** — creatives by stage (idea → production → live → paused → winning → retired), with a
+  Drive link and the hypothesis each one is testing; planned creatives can be logged before launch and
+  linked to the Meta ad afterwards.
+- **Matrix** — any two dimensions as a CPL heatmap.
+
+Tags are parsed from the ad name (`FORMAT | ANGLE ANGLE | HOOK LINE HOOK | Vn`) and can be corrected by
+hand; hand edits win. Video hook rate = 25%-watched views ÷ impressions (Meta's API no longer returns
+3-second plays), hold rate = ThruPlay ÷ hook views, graded against `video_benchmark` in the same file.
+
+**Data**: `creative/data/tracker.db` (SQLite, gitignored, rebuilt by the sync). On the first boot with an
+empty database the server backfills 180 days in the background; after that `CREATIVE_SYNC_CRON`
+(default every 3 hours) refreshes the last `CREATIVE_SYNC_WINDOW_DAYS`. Admins can also press
+**Sync Meta** on the tab. Clients see the tab read-only; tagging is admin-only.
+
+**Code**: `creative/` (router, sync, analytics, name parser), `public/creative.js` + `public/creative.css`
+(the tab's UI, generated from the standalone tracker in the Monitor Dashboard project — edit here, not there).

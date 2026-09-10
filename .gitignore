@@ -25,3 +25,6 @@ accounts.json
 
 # per-client dashboard logins written by the server (hashes; server copy is authoritative)
 users.json
+
+# creative tracker database + raw Meta dumps (server copy is authoritative; rebuilt by sync)
+creative/data/
