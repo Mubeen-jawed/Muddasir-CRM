@@ -224,7 +224,9 @@ function createCreativeRouter({ canSeeWorkspace, isAdmin, getWorkspace, visibleW
 /** First boot on a fresh box: pull 180 days so the tab isn't empty. Later boots just top up the recent window. */
 async function ensureSeeded(router) {
   if (!process.env.META_ACCESS_TOKEN) { console.log('[CREATIVE] META_ACCESS_TOKEN not set — creative sync disabled'); return; }
-  const bounds = db.dateBounds(loadConfig().accounts.map(a => a.id));
+  const ids = loadConfig().accounts.filter(a => a.active !== false).map(a => a.id);
+  if (!ids.length) { console.log('[CREATIVE] no accounts configured — creative sync disabled'); return; }
+  const bounds = db.dateBounds(ids);
   const empty = !bounds || !bounds.max_date;
   console.log(`[CREATIVE] ${empty ? 'empty database — backfilling 180 days' : 'refreshing recent window'} in the background`);
   setTimeout(() => router.runSync({ days: empty ? 180 : undefined }), empty ? 5000 : 60000);
