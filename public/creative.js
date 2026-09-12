@@ -314,7 +314,7 @@ const STAGE_LABELS = { idea: 'Idea', production: 'In production', live: 'Live', 
   function switchTab(tab) {
     state.tab = tab;
     $$('#cr_tabs button').forEach(b => b.classList.toggle('cr-active', b.dataset.tab === tab));
-    $$('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== 'tab-' + tab));
+    $$('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== 'cr_tab-' + tab));
     if (tab === 'matrix') renderMatrix();
   }
 
